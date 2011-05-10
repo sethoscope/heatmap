@@ -1,0 +1,775 @@
+#!/usr/bin/python
+#
+# heatmap.py - Generates heat map images and animations from geographic data
+# Copyright 2010 Seth Golub
+# http://www.sethoscope.net/heatmap/
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+import sys
+from math import log,tan,sqrt
+from time import mktime,strptime
+from xml import sax
+
+version = '1.01'
+
+class TrackLog:
+  class Trkseg: # for GPX <trkseg> tags
+    def __init__(self, points=None):
+      self.points = points or []
+    def __len__(self):
+      return len(self.points)
+    def __getitem__(self, i):
+      return self.points[i]
+
+  class Trkpt: # for GPX <trkpt> tags
+    def __init__(self, lat, lon):
+      self.lat = float(lat)
+      self.lon = float(lon)
+      self.coords = (self.lat, self.lon)
+    def __str__(self):
+      return '%f,%f' % (self.lat, self.lon)
+
+  class _ParseHandler(sax.ContentHandler):
+    def startDocument(self):
+      self.tag_name_stack = []
+      self.points = []
+      self.segments = []
+
+    def startElement(self, name, attrs):
+      self.content = ''
+      self.tag_name_stack.append(name)
+      if name == 'trkpt':
+        self.points.append(TrackLog.Trkpt(attrs['lat'], attrs['lon']))
+        self.segments[-1].points.append(self.points[-1])
+      elif name == 'trkseg':
+        self.segments.append(TrackLog.Trkseg())
+
+    def endElement(self, name):
+      if self.content:
+        if self.tag_name_stack[-1] == 'time' and self.tag_name_stack[-2] == 'trkpt':
+          self.points[-1].time_str = self.content
+          self.content = self.content[:-1] + ' GMT' # Turn Z into GMT
+          self.points[-1].time = mktime(strptime(self.content, '%Y-%m-%dT%H:%M:%S %Z'))
+      self.tag_name_stack.pop()
+        
+    def characters(self, content):
+      self.content += content
+
+  def __init__(self, filename):
+    handler = TrackLog._ParseHandler()
+    parser = sax.make_parser()
+    parser.setContentHandler(handler)
+    parser.parse(filename)
+    self.points = handler.points
+    self.segments = handler.segments
+  def __len__(self):
+    return len(self.points)
+  def __getitem__(self, i):
+    return self.points[i]
+
+class Projection():
+  def SetScale(self, pixels_per_degree):
+    raise NotImplemented
+  def Project(self, coords):
+    raise NotImplemented
+  def InverseProject(self, coords):   # Not all projections can support this.
+    raise NotImplemented
+  def AutoSetScale(self, bounding_box_ll, padding):
+    if options.scale:
+      # Here we assume the Earth is a sphere of radius 6378137m.
+      # earth circumference @ equator is roughly 40075017 meters (in WGS-84)
+      # so meters per degree longitude at equator =~ 111319.5
+      pixels_per_degree = 111319.5 / options.scale   # px/deg = m/deg * px/m
+    else:
+      # We need to choose a scale at which the data's bounding box,
+      # once projected onto the map, will fit in the specified height
+      # and/or width.  The catch is that we can't project until we
+      # have a scale, so what we'll do is set a provisional scale,
+      # project the bounding box onto the map, then adjust the scale
+      # appropriately.  This way we don't need to know anything about
+      # the projection.
+      #
+      # Projection subclasses are free to override this method with
+      # something simpler that just solves for scale given the lat/lon
+      # and x/y bounds.
+      SCALE_FACTOR = 1000000.0  # xy coordinates are ints, so we'll work large to minimize roundoff error.
+      self.SetScale(SCALE_FACTOR)
+      bounding_box_xy = bounding_box_ll.Map(self.Project)
+      padding *= 2 # padding-per-edge -> padding-in-each-dimension
+      if options.height:
+        pixels_per_degree = pixels_per_lat = float(options.height - padding) / bounding_box_xy.SizeY() * SCALE_FACTOR
+      if options.width:
+        pixels_per_degree = float(options.width - padding) / bounding_box_xy.SizeX() * SCALE_FACTOR
+        if options.height:
+          pixels_per_degree = min(pixels_per_degree, pixels_per_lat)
+    assert(pixels_per_degree > 0)
+    self.SetScale(pixels_per_degree)
+    printtime('Scale: %f' % (111319.5 / pixels_per_degree))
+
+class EquirectangularProjection(Projection):  # Treats Lat/Lon as a square grid.
+  # http://en.wikipedia.org/wiki/Equirectangular_projection
+  def SetScale(self, pixels_per_degree):
+    self.pixels_per_degree = pixels_per_degree
+  def Project(self, (lat, lon)):
+    x = int(lon * self.pixels_per_degree)
+    y = -int(lat * self.pixels_per_degree)
+    return (x, y)
+  def InverseProject(self, (x,y)):
+    lat = -y / self.pixels_per_degree
+    lon = x / self.pixels_per_degree
+    return (lat,lon)
+
+# If someone wants to use pixel coordinates instead of Lat/Lon, we
+# could add an XYProjection.  EquirectangularProjection would work,
+# but would be upside-down.
+
+class MercatorProjection(Projection):
+  def SetScale(self, pixels_per_degree):
+    self.pixels_per_degree = pixels_per_degree
+    self.pixels_per_radian = pixels_per_degree * 57.295779513082323
+  def Project(self, (lat, lon)):
+    x = int(lon * self.pixels_per_degree)
+    y = -int(self.pixels_per_radian * log(tan((0.78539816339744828 + 0.0087266462599716477 * lat))))  # -int(log(tan(pi/4 + pi/180 * lat / 2)))
+    return (x, y)
+  def InverseProject(self, (x,y)):
+    import math
+    lat = (360 / math.pi * math.atan(math.exp(-y / self.pixels_per_radian)) - 90)
+    lon = x / self.pixels_per_degree
+    return (lat,lon)
+
+projections = {'equirectangular': EquirectangularProjection,
+               'mercator': MercatorProjection,
+               }
+class BoundingBox():
+  '''This can be used for x,y or lat,lon; ints or floats.  It doesn\'t
+  care which dimension is which, except that SizeX() and SizeY() refer
+  to the first and second coordinate, regardless of which one is width
+  and which is height.  (For Lat/Lon, SizeX() returns North/South
+  extent.  This is confusing, but the alternative is to make assumptions
+  based on whether the type (int or float) of the coordinates, which has
+  too much hidden magic, or to let the caller set it in the constructor.
+  Instead we just require you to know what you\'re doing.  There\'s a
+  similar opportunity for magic with the desire to count fenceposts
+  rather than distance, and here too we ignore the issue and let the
+  caller deal with it as needed.'''
+  def __init__(self, corners=None, shapes=None, string=None):
+    if corners:
+      self.FromCorners(corners)
+    elif shapes:
+      self.FromShapes(shapes)
+    elif string:
+      (lat1,lon1,lat2,lon2) = [float(f) for f in string.split(',')]
+      self.FromCorners(((lat1,lon1),(lat2,lon2)))
+    else:
+      raise ValueError('BoundingBox must be initialized')
+
+  def __str__(self):
+    return '%s,%s,%s,%s  (%sx%s)' % (self.minX, self.minY, self.maxX, self.maxY, self.SizeX(), self.SizeY())
+  def Extent(self):
+    return '%s,%s,%s,%s' % (self.minX, self.minY, self.maxX, self.maxY)
+    
+  def FromCorners(self, ((x1,y1),(x2,y2))):
+    self.minX = min(x1,x2)
+    self.minY = min(y1,y2)
+    self.maxX = max(x1,x2)
+    self.maxY = max(y1,y2)
+
+  def FromShapes(self, shapes):
+    try:
+      first = shapes.pop(0)
+    except StopIteration:  # no points
+      return self.FromCorners(((0,0),(0,0)))
+    self.minX = first.MinX()
+    self.maxX = first.MaxX()
+    self.minY = first.MinY()
+    self.maxY = first.MaxY()
+    for shape in shapes:
+      self.minX = min(shape.MinX(), self.minX)
+      self.maxX = max(shape.MaxX(), self.maxX)
+      self.minY = min(shape.MinY(), self.minY)
+      self.maxY = max(shape.MaxY(), self.maxY)
+
+  def Corners(self):
+    return ((self.minX, self.minY), (self.maxX, self.maxY))
+
+  # We use "SixeX" and "SizeY" instead of Width and Height because we
+  # use these both for XY and LatLon, and they're in opposite order.
+  # Rather than have the object try to keep track, we just choose not
+  # to need it.  In a strongly typed language, we'd could distinguish
+  # between degrees and pixels.  We could do that here by overloading
+  # floats and ints, but that would just be a different kind of
+  # confusion and probably easier to make mistakes with.
+  def SizeX(self):
+    return self.maxX - self.minX
+
+  def SizeY(self):
+    return self.maxY - self.minY
+
+  def Grow(self, pad):
+    self.minX -= pad
+    self.minY -= pad
+    self.maxX += pad
+    self.maxY += pad
+
+  def ClipToSize(self, width=None, height=None, include_fenceposts=True):
+    fencepost = include_fenceposts and 1 or 0
+    if width:
+      current_width = self.SizeX()
+      self.maxX += int(float(1 + width - current_width - fencepost) / 2) # round up
+      self.minX = self.maxX - width + fencepost
+
+    if height:
+      current_height = self.SizeY()
+      self.maxY += int(float(1 + height - current_height - fencepost) / 2) # round up
+      self.minY = self.maxY - height + fencepost
+
+  def IsInside(self, (x,y)):
+    return x >= self.minX and x <= self.maxX and y >= self.minY and y <= self.maxY
+
+  def Map(self, func):
+    '''Returns a new BoundingBox whose corners are a function of the
+    corners of this one.  The expected use is to project a BoundingBox
+    onto a map.  For example: bbox_xy = bbox_ll.Map(projector.Project)'''
+    return BoundingBox(corners=(func((self.minX,self.minY)),
+                                func((self.maxX,self.maxY))))
+
+class Matrix:
+  def __init__(self):
+    self.data = {}  # sparse matrix, stored as {(x,y) : value}
+
+  def Add(self, coord, val, adder=lambda x,y: x+y):
+    if coord in self.data:
+      self.data[coord] = adder(self.data[coord], val)
+    else:
+      self.data[coord] = val
+
+  def Set(self, coord, val):
+    self.data[coord] = val
+
+  def iteritems(self):
+    return self.data.iteritems()
+  def Max(self):
+    return max(self.data.values())
+  def items(self):
+    return self.data.items()
+
+  def Get(self, coord):
+    return self.data[coord]   # will throw KeyError for unset coord
+
+  def BoundingBox(self):
+    return(BoundingBox(iter=self.data.iterkeys()))
+
+  def Map(self, func):
+    '''Apply func to all data values in place'''
+    for key in self.data.iterkeys():
+      self.data[key] = func(self.data[key])
+
+class AppendingMatrix(Matrix):
+  def Add(self, coord, val):
+    if coord in self.data:
+      self.data[coord].append(val)
+    else:
+      self.data[coord] = [val]
+  def Reduce(self, reducer):
+    m = Matrix()
+    for (coord, values) in self.iteritems():
+      m.Set(coord, reducer(values))
+    return m
+
+class DiminishingReducer():
+  def __init__(self, decay):
+    '''This reducer returns a weighted sum of the values, where weight N is pow(decay,N).  This means the largest value counts fully, but additional values have diminishing contributions.  decay=0.0 makes the reduction equivalent to max(), which makes each data point visible, but says nothing about their relative magnitude.  decay=1.0 makes this like sum(), which makes the relative magnitude of the points more visible, but could make smaller values hard to see.  Experiment with values between 0 and 1.  Values outside that range will give weird results.'''
+    self.decay = decay
+  def Reduce(self, values):
+    # It would be nice to do this on the fly, while accumulating data, but it needs to be insensitive to data order.
+    weight = 1.0
+    total = 0.0
+    values.sort(reverse=True)
+    for value in values:
+      total += value * weight
+      weight *= self.decay
+    return total
+
+class Point:
+  def __init__(self, (x, y)):
+    self.x = x
+    self.y = y
+  def __str__(self):
+    return 'P(%s,%s)' % (self.x,self.y)
+  def Distance(self, (x,y)):  # square distance, assumes square units -- convenient, but wrong
+    return (((self.x - x) ** 2) + ((self.y - y) ** 2)) ** 0.5
+  def MinX(self):
+    return self.x
+  def MaxX(self):
+    return self.x
+  def MinY(self):
+    return self.y
+  def MaxY(self):
+    return self.y
+  def Map(self, func):
+    return Point(func((self.x, self.y)))
+    
+class LineSegment:
+  def __init__(self, (x1, y1), (x2, y2)):
+    self.x1 = x1
+    self.x2 = x2
+    self.y1 = y1
+    self.y2 = y2
+    self.length_squared = float((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1))
+  def __str__(self):
+    return 'LineSegment((%s,%s), (%s,%s))' % (self.x1, self.y1, self.x2, self.y2)
+  def MinX(self):
+    return min(self.x1, self.x2)
+  def MaxX(self):
+    return max(self.x1, self.x2)
+  def MinY(self):
+    return min(self.y1, self.y2)
+  def MaxY(self):
+    return max(self.y1, self.y2)
+  def Distance(self, (x,y)):
+    # http://stackoverflow.com/questions/849211/shortest-distance-between-a-point-and-a-line-segment
+    # http://www.topcoder.com/tc?d1=tutorials&d2=geometry1&module=Static#line_point_distance
+    # http://local.wasp.uwa.edu.au/~pbourke/geometry/pointline/
+    try:
+      dx = (self.x2 - self.x1)
+      dy = (self.y2 - self.y1)
+      u = ((x - self.x1) * dx + (y - self.y1) * dy) / self.length_squared
+      if u < 0:
+        u = 0
+      elif u > 1:
+        u = 1
+    except ZeroDivisionError:
+      u = 0  # Our line is zero-length.  That's ok.
+    dx = self.x1 + u * dx - x
+    dy = self.y1 + u * dy - y
+    return sqrt(dx*dx + dy*dy)
+  def Map(self, func):
+    xy1 = func((self.x1, self.y1))
+    xy2 = func((self.x2, self.y2))
+    # Quantizing can make both endpoints the same, turning the
+    # LineSegment into an inefficient Point.  Better to replace it.
+    if xy1 == xy2:
+      return Point(xy1)
+    else:
+      return LineSegment(xy1, xy2)
+
+class LinearKernel:
+  '''Uses a linear falloff, essentially turning a point into a cone.'''
+  def __init__(self, radius):
+    self.radius = radius # in pixels
+  def Heat(self, distance):
+    if distance >= self.radius:
+      return 0.0
+    return 1.0 - (float(distance) / self.radius)
+
+def AddData(shape, matrix, kernel):
+  # We iterate over every point in a bounding box around the given
+  # shape, with an extra margin given by the kernel's self-reported
+  # maximum range.
+  for x in range(shape.MinX() - kernel.radius, shape.MaxX() + kernel.radius + 1):
+    for y in range(shape.MinY() - kernel.radius, shape.MaxY() + kernel.radius + 1):
+      value = kernel.Heat(shape.Distance((x,y)))
+      if value:
+        matrix.Add((x,y), value)
+
+def str2hsva(str):
+  '''Turns #06688bbff into (102, 136, 187, 255); the first number is 3 digits!'''
+  return (int(str[1:4], 16),
+          int(str[4:6], 16),
+          int(str[6:8], 16),
+          int(str[8:10], 16))
+
+class ColorMap:
+  def __getitem__(self, i):
+    return self.data[i]
+
+  def FromHsvaRangeStrings(self, hsva_min_str, hsva_max_str):
+    from colorsys import hsv_to_rgb
+    hsva_min = [_8bitInt_to_float(x) for x in str2hsva(hsva_min_str)]
+    hsva_max = [_8bitInt_to_float(x) for x in str2hsva(hsva_max_str)]
+    hsva_range = map(lambda min,max: max-min, hsva_min,hsva_max) # more useful this way
+    self.data = []
+    for value in range(0,256):
+      hsva = map(lambda range,min: value / 255.0 * range + min, hsva_range, hsva_min)
+      hsva[0] = hsva[0] % 1 # in case hue is out of range
+      rgba = tuple([int(x * 255) for x in hsv_to_rgb(*hsva[0:3]) + (hsva[3],)])
+      self.data.append(rgba)
+  
+  def FromImage(self, img):
+    assert img.mode == 'RGBA', 'Gradient image must be RGBA.  Yours is %s.' % img.mode
+    maxY = img.size[1] - 1
+    self.data = []
+    for value in range(256):
+      self.data.append(img.getpixel((0,maxY*(255-value)/255)))
+
+def _blend_pixels(a, b):
+  # a is RGBA, b is RGB; we could write this more generically, but why complicate things?
+  alpha = a[3] / 255.0
+  return tuple(map(lambda aa,bb: int(aa * alpha + bb * (1-alpha)), a[:3],b))
+
+class ImageMaker():
+  def __init__(self, colormap, background=None, background_image=None):
+    '''Each argument to the constructor should be a 4-tuple of (hue,
+    saturaton, value, alpha), one to use for minimum data values and
+    one for maximum.  Each should be in [0,1], however because hue is
+    circular, you may specify hue in any range and it will be shifted
+    into [0,1] as needed.  This is so you can wrap around the color
+    wheel in either direction.'''
+    self.colormap = colormap
+    self.background_image = background_image
+    self.background = None
+    if background and not background_image:
+      from PIL import ImageColor
+      self.background = ImageColor.getrgb(background)
+    
+  def SavePNG(self, matrix, filename, requested_width=None, requested_height=None, bounding_box=None):
+    printtime('saving image')
+
+    if not bounding_box:
+      bounding_box = matrix.BoundingBox()
+    bounding_box.ClipToSize(requested_width, requested_height)
+    ((minX,minY), (maxX,maxY)) = bounding_box.Corners()
+    width = maxX - minX + 1
+    height = maxY - minY + 1
+    
+    from PIL import Image
+    if self.background:
+      img = Image.new('RGB', (width,height), self.background)
+    else:
+      img = Image.new('RGBA', (width,height))
+      
+    maxval = matrix.Max()
+    pixels = img.load()
+
+    # Iterating just over the non-zero data points is ideal when
+    # plotting the whole image, but for generating tile sets, it might
+    # make more sense for the caller to partition the points and pass in
+    # a list of points to use for each image.  That way we only iterate
+    # over the points once, rather than once per image.  That also gives
+    # the caller an opportunity to do something better for tiles that
+    # contain no data.
+    for ((x,y), val) in matrix.iteritems():
+      if bounding_box.IsInside((x,y)):
+        if self.background:
+          pixels[x - minX, y - minY] = _blend_pixels(self.colormap[int(255 * val / maxval)], self.background)
+        else:
+          pixels[x - minX, y - minY] = self.colormap[int(255 * val / maxval)]
+    if self.background_image:
+      img = Image.composite(img, self.background_image, img.split()[3])  # Is this really the best way?
+    img.save(filename)
+
+
+class ImageSeriesMaker():
+  def __init__(self, colormap, background, background_image, filename_template, num_frames, total_points, width, height, bounding_box):
+    self.image_maker = ImageMaker(colormap, background, background_image)
+    self.filename_template = filename_template
+    self.num_frames = num_frames
+    self.frequency = float(num_frames) / total_points
+    self.input_count = 0
+    self.frame_count = 0
+    self.width = width
+    self.height = height
+    self.bounding_box = bounding_box
+  def MaybeSaveImage(self, matrix):
+    self.input_count += 1
+    x = self.input_count * self.frequency   # frequency <= 1
+    if x - int(x) < self.frequency:
+      self.frame_count += 1
+      printtime('Frame %d of %d' % (self.frame_count, self.num_frames))
+      matrix = Finalize(matrix)
+      self.image_maker.SavePNG(matrix, self.filename_template % self.frame_count,
+                               self.width, self.height, self.bounding_box)
+
+def _GetOSMImage(bbox, zoom):
+  # Just a wrapper for osm.createOSMImage to translate coordinate schemes
+  try:
+    from osmviz.manager import PILImageManager, OSMManager
+    osm = OSMManager(image_manager=PILImageManager('RGB'))
+    ((lat1,lon1),(lat2,lon2)) = bbox.Corners()
+    image,bounds = osm.createOSMImage((lat1,lat2,lon1,lon2), zoom)
+    (lat1,lat2,lon1,lon2) = bounds
+    return image, BoundingBox(corners=((lat1,lon1),(lat2,lon2)))
+  except ImportError, e:
+    sys.stderr.write("\nImportError: %s.\n"
+                     "The --osm option depends on the osmviz module, available from\n"
+                     "http://cbick.github.com/osmviz/\n\n" % str(e))
+    sys.exit(1)
+
+  
+def _ScaleForOSMZoom(zoom):
+  return 256 * pow(2,zoom) / 360.0
+
+def ChooseOSMZoom(bbox_ll, padding):
+  # Since we know we're only going to do this with Mercator, we could do
+  # a bit more math and solve this directly, but as a first pass method,
+  # we instead project the bounding box into pixel-land at a high zoom
+  # level, then see the power of two we're off by.
+  if options.zoom:
+    return options.zoom
+  crazy_zoom_level = 30
+  proj = MercatorProjection()
+  scale = _ScaleForOSMZoom(crazy_zoom_level)
+  proj.SetScale(scale)
+  printtime('Scale: %f' % (111319.5 / scale))
+  bbox_crazy_xy = bbox_ll.Map(proj.Project)
+  if options.width:
+    size_ratio = width_ratio = float(bbox_crazy_xy.SizeX()) / (options.width - 2*padding)
+  if options.height:
+    size_ratio = float(bbox_crazy_xy.SizeY()) / (options.height - 2*padding)
+    if options.width:
+      size_ratio = max(size_ratio, width_ratio)
+  # TODO: We use --height and --width as upper bounds, choosing a zoom
+  # level that lets our image be no larger than the specified size.
+  # It might be desirable to use them as lower bounds or to get as close
+  # as possible, whether larger or smaller (where "close" probably means
+  # in pixels, not scale factors).
+  # TODO: This is off by a little bit at small scales.
+  zoom = int(crazy_zoom_level - log(size_ratio, 2))
+  if options.verbose:
+    print 'Choosing OSM zoom level %d' % zoom
+  return zoom
+
+def GetOSMBackground(bbox_ll, padding):
+  zoom = ChooseOSMZoom(bbox_ll, padding)
+  proj = MercatorProjection()
+  proj.SetScale(_ScaleForOSMZoom(zoom))
+  bbox_xy = bbox_ll.Map(proj.Project)
+  bbox_xy.Grow(padding)  # We're not checking that the padding fits within the specified size.
+  bbox_ll = bbox_xy.Map(proj.InverseProject)
+  image, img_bbox_ll = _GetOSMImage(bbox_ll, zoom)
+  img_bbox_xy = img_bbox_ll.Map(proj.Project)
+
+  # TODO: this crops to our data extent, which means we're not making
+  # an image of the requested dimensions.  Perhaps we should let the
+  # user specify whether to treat the requested size as min,max,exact.
+  (x_offset, y_offset) = map(lambda a,b: a-b, bbox_xy.Corners()[0], img_bbox_xy.Corners()[0])
+  x_size = bbox_xy.SizeX()+1
+  y_size = bbox_xy.SizeY()+1
+  image = image.crop((x_offset,
+                      y_offset,
+                      x_offset + x_size,
+                      y_offset + y_size))
+  return image, bbox_ll, proj
+
+
+import time
+t0 = time.time()
+def printtime(str):
+  if options.verbose:
+    print '%10.3f sec\t // %s' % (time.time() - t0, str)
+
+def _8bitInt_to_float(i):
+  '''Primirily for scaling numbers from [0,255] to [0,1.0].  It will
+  also work on numbers outside that range, but with some skew: every
+  256th place is ignored so that people writing in hex can write 1XX
+  in order to get 1.0 + _8bitInt_to_float(XX).  This is mathematically
+  incorrect, but rather convenient.  The only time anyone will give a
+  number outside [0,255] is on the command line, using strings like
+  #120ffffff, where a non-zero first digit lets hue wrap around the
+  color wheel the opposite way.  ff would otherwise be equivalent to
+  1fe, not 1ff.'''
+  return float(i - int(i/256)) / 255
+
+def Finalize(matrix):
+  printtime('combining coincident points')
+  dr=DiminishingReducer(options.decay)
+  matrix = matrix.Reduce(dr.Reduce)
+  return matrix
+
+def ProcessShapes(shapes, projection, hook=None):
+  printtime('processing data')
+  matrix = AppendingMatrix()
+  kernel = LinearKernel(options.radius)
+  for shape in shapes:
+    AddData(shape.Map(projection.Project), matrix, kernel)
+    if hook:
+      hook(matrix)
+  return matrix
+
+
+def setup_options():
+  # handy for other programs that use this as a module
+  from optparse import OptionParser
+  optparser = OptionParser()
+  optparser.add_option('-g', '--gpx', metavar='FILE')
+  optparser.add_option('-p', '--points', metavar='FILE', help='File containing one space-separated coordinate pair per line')
+
+  optparser.add_option('-s', '--scale', metavar='FLOAT', type='float', help='meters per pixel, approximate'),
+  optparser.add_option('-W', '--width', metavar='INT', type='int', help='width of output image'),
+  optparser.add_option('-H', '--height', metavar='INT', type='int', help='height of output image'),
+  optparser.add_option('-P', '--projection', metavar='NAME', type='choice', choices=projections.keys(), default='mercator', help='choices: ' + ', '.join(projections.keys()) + '; default: %default')
+  optparser.add_option('-e', '--extent', metavar='RANGE', help='Clip results to RANGE, which is specified as lat1,lon1,lat2,lon2; (for square mercator: -85.0511,-180,85.0511,180)')
+  optparser.add_option('-R', '--margin', metavar='INT', type='int', default=0, help='Try to keep data at least this many pixels away from image border.')
+  optparser.add_option('-r', '--radius', metavar='INT', type='int', default=15, help='pixel radius of point blobs; default: %default')
+  optparser.add_option('-d', '--decay', metavar='FLOAT', type='float', default=0.95, help='float in [0,1]; Larger values give more weight to data magnitude.  Smaller values are more democratic.  default: %default')
+
+  optparser.add_option('-S', '--save', metavar='FILE', help='save processed data to FILE')
+  optparser.add_option('-L', '--load', metavar='FILE', help='load processed data from FILE')
+
+  optparser.add_option('-o', '--output', metavar='FILE', help='name of output file (image or video)')
+  optparser.add_option('-a', '--animate', action='store_true', help='Make an animation instead of a static image')
+  optparser.add_option('-f', '--frames', type='int', default=30, help='number of frames for animation; default: %default')
+  optparser.add_option('-F', '--ffmpegopts', metavar='STR', help='extra options to pass to ffmpeg when making an animation')
+  optparser.add_option('-K', '--keepframes', action='store_true', help='keep intermediate images after creating an animation')
+  optparser.add_option('-b', '--background', metavar='COLOR', help='composite onto this background (color name or #rrggbb)')
+  optparser.add_option('-I', '--background_image', metavar='FILE', help='composite onto this image')
+  optparser.add_option('-B', '--background_brightness', type='float', metavar='NUM', help='Multiply each pixel in background image by this.')
+  optparser.add_option('-m', '--hsva_min', metavar='HEX', default='#000ffff00', help='#hhhssvvaa hex for minimum data values; default: %default')
+  optparser.add_option('-M', '--hsva_max', metavar='HEX', default='#02affffff', help='#hhhssvvaa hex for maximum data values; default: %default')
+  optparser.add_option('-G', '--gradient', metavar='FILE', help='Take color gradient from this the first column of pixels in this image.  Overrides -m and -M.')
+
+  optparser.add_option('', '--osm', action='store_true', help='Composite onto OpenStreetMap tiles')
+  optparser.add_option('-z', '--zoom', type='int', help='Zoom level for OSM; 0 (the default) means autozoom')
+  optparser.add_option('-v', '--verbose', action='store_true')
+  optparser.add_option('-V', '--version', action='store_true')
+  return optparser
+
+# Note to self: -m #0aa80ff00 -M #120ffffff is nice.
+
+def main():
+  optparser = setup_options()
+  (options, args) = optparser.parse_args()
+  globals()['options'] = options
+
+  if options.version:
+    print '%s version %s' % (sys.argv[0], version)
+    sys.exit(0)
+
+  if not ((options.points or options.gpx or options.load) and (options.output or options.save)):
+    sys.stderr.write("You must specify one input (-g -p -L) and at least one output (-o or -S).\n")
+    sys.exit(1)
+
+  if (options.gpx or options.points) and not ((options.width or options.height or options.scale or options.background_image)
+                                             or (options.osm and options.zoom)):
+    sys.stderr.write("With --gpx or --points, you must also specify at least one of --width, --height,\n --scale, or --background_image, or both --osm and --zoom.\n")
+    sys.exit(1)
+
+  if options.output:
+    colormap = ColorMap()
+    if options.gradient:
+      from PIL import Image
+      colormap.FromImage(Image.open(options.gradient))
+    else:
+      colormap.FromHsvaRangeStrings(options.hsva_min, options.hsva_max)
+
+  matrix = None  # make the result available for load & save
+  if options.load:
+    printtime('loading data')
+    process_data = False
+    import cPickle as pickle
+    matrix = pickle.load(open(options.load))
+  else:
+    process_data = True
+    if options.gpx:
+      printtime('reading GPX track')
+      track = TrackLog(options.gpx)
+      if options.verbose:
+        printtime('track length: %d points in %d segments' % (len(track), len(track.segments)))
+      shapes = []
+      for trkseg in track.segments:
+        for i,p1 in enumerate(trkseg[:-1]):
+          p2=trkseg[i+1]
+          # We'll end up projecting every point twice, but this is the least of our performance problems.
+          shapes.append(LineSegment(p1.coords, p2.coords))
+    else:
+      printtime('reading points')
+      shapes = []
+      f = open(options.points)
+      for line in f:
+        (lat,lon) = [float(x) for x in line.split()]
+        shapes.append(Point((lat,lon)))
+      if options.verbose:
+        printtime('read %d points' % len(shapes))
+      f.close()
+
+  printtime('Determining scale and scope')
+
+  bounding_box_ll = None
+  bounding_box_xy_padding = options.margin
+  projection = None
+  if options.extent:
+    bounding_box_ll = BoundingBox(string=options.extent)
+    # TODO: (speed optimization) we should compute a bounding box that
+    # includes an extra kernel radius and use it to discard points that
+    # are too far outside the extent to affect the output.
+  elif options.load:
+    projection = matrix.projection
+    bounding_box_ll = matrix.BoundingBox().Map(projection.InverseProject)
+  else:
+    bounding_box_ll = BoundingBox(shapes=shapes)
+    bounding_box_xy_padding += options.radius   # Make room for the spread
+
+  background_image = None
+  if options.background_image:
+    from PIL import Image
+    background_image = Image.open(options.background_image)
+    (options.width, options.height) = background_image.size
+  elif options.osm:
+    background_image, bounding_box_ll, projection = GetOSMBackground(bounding_box_ll,
+                                                                     bounding_box_xy_padding)
+    (options.width, options.height) = background_image.size
+    bounding_box_xy_padding = 0  # already baked in
+
+  if options.background_brightness:
+    background_image = background_image.point(lambda x: x * options.background_brightness)
+
+  if not projection:
+    projection = projections[options.projection]()
+    projection.AutoSetScale(bounding_box_ll, bounding_box_xy_padding)
+  bounding_box_xy = bounding_box_ll.Map(projection.Project)
+  bounding_box_xy.Grow(bounding_box_xy_padding)
+  if not options.extent and options.verbose:
+    actual_bounding_box_ll = bounding_box_xy.Map(projection.InverseProject)
+    printtime('Map extent: %s' % actual_bounding_box_ll.Extent())
+
+  if process_data:
+    if options.animate:
+      import tempfile, os.path, shutil, subprocess
+      tmpdir = tempfile.mkdtemp()
+      if options.verbose:
+        print 'Putting animation frames in %s' % tmpdir
+      imgfile_template = os.path.join(tmpdir, 'frame-%05d.png')
+      maker = ImageSeriesMaker(colormap, options.background, background_image, imgfile_template,
+                               min(options.frames, len(shapes)), len(shapes), options.width, options.height, bounding_box_xy)
+      hook = maker.MaybeSaveImage
+      matrix = ProcessShapes(shapes, projection, hook)
+      if maker.frame_count < options.frames:
+        hook(matrix) # one last one
+      printtime('Encoding video')
+      command = ['ffmpeg', '-i', imgfile_template, options.output]
+      if options.ffmpegopts:
+        command.extend(options.ffmpegopts.split()) # I hope they don't have spaces in their arguments
+      subprocess.call(command)
+      if not options.keepframes:
+        shutil.rmtree(tmpdir)
+      else:
+        print 'The animation frames have been left in %s .' % tmpdir
+    else:
+      matrix = ProcessShapes(shapes, projection)
+      matrix = Finalize(matrix)
+  if options.output and not options.animate:
+    ImageMaker(colormap, options.background, background_image).SavePNG(matrix, options.output, options.width, options.height, bounding_box_xy)
+
+  if options.save:
+    printtime('saving data')
+    import cPickle as pickle
+    matrix.projection = projection
+    pickle.dump(matrix, open(options.save, 'w'), 2)
+
+  printtime('end')
+
+if __name__ == '__main__':
+  main()
+
