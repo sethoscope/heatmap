@@ -456,14 +456,13 @@ class ImageMaker():
       self.background = ImageColor.getrgb(background)
     
   def SavePNG(self, matrix, filename, requested_width=None, requested_height=None, bounding_box=None):
-    printtime('saving image')
-
     if not bounding_box:
       bounding_box = matrix.BoundingBox()
     bounding_box.ClipToSize(requested_width, requested_height)
     ((minX,minY), (maxX,maxY)) = bounding_box.Corners()
     width = maxX - minX + 1
     height = maxY - minY + 1
+    printtime('saving image (%d x %d)' % (width, height))
     
     from PIL import Image
     if self.background:
@@ -760,7 +759,7 @@ def main():
       import tempfile, os.path, shutil, subprocess
       tmpdir = tempfile.mkdtemp()
       if options.verbose:
-        print 'Putting animation frames in %s' % tmpdir
+        printtime('Putting animation frames in %s' % tmpdir)
       imgfile_template = os.path.join(tmpdir, 'frame-%05d.png')
       maker = ImageSeriesMaker(colormap, options.background, background_image, imgfile_template,
                                min(options.frames, len(shapes)), len(shapes), options.width, options.height, bounding_box_xy)
@@ -768,10 +767,10 @@ def main():
       matrix = ProcessShapes(shapes, projection, hook)
       if maker.frame_count < options.frames:
         hook(matrix) # one last one
-      printtime('Encoding video')
       command = ['ffmpeg', '-i', imgfile_template, options.output]
       if options.ffmpegopts:
         command.extend(options.ffmpegopts.split()) # I hope they don't have spaces in their arguments
+      printtime('Encoding video: %s' % ' '.join(command))
       subprocess.call(command)
       if not options.keepframes:
         shutil.rmtree(tmpdir)
