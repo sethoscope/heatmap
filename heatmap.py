@@ -767,9 +767,10 @@ def main():
       matrix = ProcessShapes(shapes, projection, hook)
       if maker.frame_count < options.frames:
         hook(matrix) # one last one
-      command = ['ffmpeg', '-i', imgfile_template, options.output]
+      command = ['ffmpeg', '-i', imgfile_template]
       if options.ffmpegopts:
         command.extend(options.ffmpegopts.split()) # I hope they don't have spaces in their arguments
+      command.append(options.output) # output filename must be last
       printtime('Encoding video: %s' % ' '.join(command))
       subprocess.call(command)
       if not options.keepframes:
