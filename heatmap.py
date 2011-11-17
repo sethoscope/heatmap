@@ -405,12 +405,14 @@ def AddData(shape, matrix, kernel):
         if value:
           matrix.Add((x,y), value)
 
-def str2hsva(str):
-  '''Turns #06688bbff into (102, 136, 187, 255); the first number is 3 digits!'''
-  return (int(str[1:4], 16),
-          int(str[4:6], 16),
-          int(str[6:8], 16),
-          int(str[8:10], 16))
+def str2hsva(string):
+  '''Turns 06688bbff into (102, 136, 187, 255); the first number is 3 digits!'''
+  if string.startswith('#'):
+    string = string[1:]  # Leading "#" was once required, is now optional.
+  return (int(string[0:3], 16),
+          int(string[3:5], 16),
+          int(string[5:7], 16),
+          int(string[7:9], 16))
 
 class ColorMap:
   def __getitem__(self, i):
@@ -646,8 +648,8 @@ def setup_options():
   optparser.add_option('-b', '--background', metavar='COLOR', help='composite onto this background (color name or #rrggbb)')
   optparser.add_option('-I', '--background_image', metavar='FILE', help='composite onto this image')
   optparser.add_option('-B', '--background_brightness', type='float', metavar='NUM', help='Multiply each pixel in background image by this.')
-  optparser.add_option('-m', '--hsva_min', metavar='HEX', default='#000ffff00', help='#hhhssvvaa hex for minimum data values; default: %default')
-  optparser.add_option('-M', '--hsva_max', metavar='HEX', default='#02affffff', help='#hhhssvvaa hex for maximum data values; default: %default')
+  optparser.add_option('-m', '--hsva_min', metavar='HEX', default='000ffff00', help='hhhssvvaa hex for minimum data values; default: %default')
+  optparser.add_option('-M', '--hsva_max', metavar='HEX', default='02affffff', help='hhhssvvaa hex for maximum data values; default: %default')
   optparser.add_option('-G', '--gradient', metavar='FILE', help='Take color gradient from this the first column of pixels in this image.  Overrides -m and -M.')
 
   optparser.add_option('', '--osm', action='store_true', help='Composite onto OpenStreetMap tiles')
