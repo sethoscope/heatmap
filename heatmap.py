@@ -22,7 +22,7 @@ from math import log,tan,sqrt
 from time import mktime,strptime
 from xml import sax
 
-version = '1.02'
+version = '1.03'
 
 class TrackLog:
   class Trkseg: # for GPX <trkseg> tags
@@ -109,8 +109,10 @@ class Projection():
       bounding_box_xy = bounding_box_ll.Map(self.Project)
       padding *= 2 # padding-per-edge -> padding-in-each-dimension
       if options.height:
+        # TODO: div by zero error if all data exists at a single point.
         pixels_per_degree = pixels_per_lat = float(options.height - padding) / bounding_box_xy.SizeY() * SCALE_FACTOR
       if options.width:
+        # TODO: div by zero error if all data exists at a single point.
         pixels_per_degree = float(options.width - padding) / bounding_box_xy.SizeX() * SCALE_FACTOR
         if options.height:
           pixels_per_degree = min(pixels_per_degree, pixels_per_lat)
@@ -187,19 +189,13 @@ class BoundingBox():
     self.maxY = max(y1,y2)
 
   def FromShapes(self, shapes):
-    try:
-      first = shapes.pop(0)
-    except StopIteration:  # no points
+    if not shapes:
       return self.FromCorners(((0,0),(0,0)))
-    self.minX = first.MinX()
-    self.maxX = first.MaxX()
-    self.minY = first.MinY()
-    self.maxY = first.MaxY()
-    for shape in shapes:
-      self.minX = min(shape.MinX(), self.minX)
-      self.maxX = max(shape.MaxX(), self.maxX)
-      self.minY = min(shape.MinY(), self.minY)
-      self.maxY = max(shape.MaxY(), self.maxY)
+    # We loop through four times, but the code is nice and clean.
+    self.minX = min(s.MinX() for s in shapes)
+    self.maxX = max(s.MaxX() for s in shapes)
+    self.minY = min(s.MinY() for s in shapes)
+    self.maxY = max(s.MaxY() for s in shapes)
 
   def Corners(self):
     return ((self.minX, self.minY), (self.maxX, self.maxY))
