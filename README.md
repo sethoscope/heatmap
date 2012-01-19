@@ -37,7 +37,6 @@ A more thorough description and examples are posted at
 Improvements I might one day get to, probably in this order:
 
  - refactor into a useful library (rather than a command line tool)
- - allow point weightings
  - weight GPS line segments by inverse speed (so each point properly
    represents how long was spent there, regardless of data sampling
    rate)

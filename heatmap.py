@@ -22,7 +22,7 @@ from math import log,tan,sqrt
 from time import mktime,strptime
 from xml import sax
 
-version = '1.03'
+version = '1.04'
 
 class TrackLog:
   class Trkseg: # for GPX <trkseg> tags
@@ -299,9 +299,10 @@ class DiminishingReducer():
     return total
 
 class Point:
-  def __init__(self, (x, y)):
+  def __init__(self, (x, y), weight=1.0):
     self.x = x
     self.y = y
+    self.weight = weight
   def __str__(self):
     return 'P(%s,%s)' % (self.x,self.y)
   def GeneralDistance(self, x, y):  # assumes square units, which causes distortion in some projections
@@ -317,14 +318,15 @@ class Point:
   def MaxY(self):
     return self.y
   def Map(self, func):
-    return Point(func((self.x, self.y)))
+    return Point(func((self.x, self.y)), self.weight)
     
 class LineSegment:
-  def __init__(self, (x1, y1), (x2, y2)):
+  def __init__(self, (x1, y1), (x2, y2), weight=1.0):
     self.x1 = x1
     self.x2 = x2
     self.y1 = y1
     self.y2 = y2
+    self.weight = weight
     self.length_squared = float((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1))
   def __str__(self):
     return 'LineSegment((%s,%s), (%s,%s))' % (self.x1, self.y1, self.x2, self.y2)
@@ -359,9 +361,9 @@ class LineSegment:
     # Quantizing can make both endpoints the same, turning the
     # LineSegment into an inefficient Point.  Better to replace it.
     if xy1 == xy2:
-      return Point(xy1)
+      return Point(xy1, self.weight)
     else:
-      return LineSegment(xy1, xy2)
+      return LineSegment(xy1, xy2, self.weight)
 
 class LinearKernel:
   '''Uses a linear falloff, essentially turning a point into a cone.'''
@@ -387,7 +389,7 @@ def AddData(shape, matrix, kernel):
       for x in range(-kernel.radius, kernel.radius + 1):
         for y in range(-kernel.radius, kernel.radius + 1):
           try:
-            matrix.Add((shape.x+x,shape.y+y), matrix._heat_cache[(x,y)])
+            matrix.Add((shape.x+x,shape.y+y), shape.weight * matrix._heat_cache[(x,y)])
           except KeyError:
             pass # zeros aren't stored in the cache, so we expect some misses
 
@@ -397,7 +399,7 @@ def AddData(shape, matrix, kernel):
     # maximum range.
     for x in range(shape.MinX() - kernel.radius, shape.MaxX() + kernel.radius + 1):
       for y in range(shape.MinY() - kernel.radius, shape.MaxY() + kernel.radius + 1):
-        value = kernel.Heat(shape.Distance((x,y)))
+        value = shape.weight * kernel.Heat(shape.Distance((x,y)))
         if value:
           matrix.Add((x,y), value)
 
@@ -622,7 +624,7 @@ def setup_options():
   from optparse import OptionParser
   optparser = OptionParser()
   optparser.add_option('-g', '--gpx', metavar='FILE')
-  optparser.add_option('-p', '--points', metavar='FILE', help='File containing one space-separated coordinate pair per line')
+  optparser.add_option('-p', '--points', metavar='FILE', help='File containing one space-separated coordinate pair per line, with optional point value as third term.')
 
   optparser.add_option('-s', '--scale', metavar='FLOAT', type='float', help='meters per pixel, approximate'),
   optparser.add_option('-W', '--width', metavar='INT', type='int', help='width of output image'),
@@ -706,8 +708,11 @@ def main():
       shapes = []
       f = open(options.points)
       for line in f:
-        (lat,lon) = [float(x) for x in line.split()]
-        shapes.append(Point((lat,lon)))
+        values = [float(x) for x in line.strip().split()]
+        assert len(values) == 2 or len(values) == 3, 'input lines must have two or three values: %s' % line
+        (lat,lon) = values[0:2]
+        weight = len(values) == 2 and 1.0 or values[2]
+        shapes.append(Point((lat,lon), weight))
       if options.verbose:
         printtime('read %d points' % len(shapes))
       f.close()
