@@ -242,14 +242,23 @@ class BoundingBox():
                                 func((self.maxX,self.maxY))))
 
 class Matrix:
+  @classmethod
+  def MatrixFactory(cls, decay):
+    # If decay is 0 or 1, we can accumulate as we go and save lots of memory.
+    if decay == 1.0:
+      printtime('creating a summing matrix')
+      return SummingMatrix()
+    elif decay == 0.0:
+      printtime('creating a maxing matrix')
+      return MaxingMatrix()
+    printtime('creating an appending matrix')
+    return AppendingMatrix()
+
   def __init__(self):
     self.data = {}  # sparse matrix, stored as {(x,y) : value}
 
   def Add(self, coord, val, adder=lambda x,y: x+y):
-    if coord in self.data:
-      self.data[coord] = adder(self.data[coord], val)
-    else:
-      self.data[coord] = val
+    raise NotImplemented
 
   def Set(self, coord, val):
     self.data[coord] = val
@@ -267,10 +276,16 @@ class Matrix:
   def BoundingBox(self):
     return(BoundingBox(iter=self.data.iterkeys()))
 
-  def Map(self, func):
-    '''Apply func to all data values in place'''
-    for key in self.data.iterkeys():
-      self.data[key] = func(self.data[key])
+  def Finalized(self):
+    return self
+
+class SummingMatrix(Matrix):
+  def Add(self, coord, val):
+    self.data[coord] = val + self.data.get(coord, 0.0)
+
+class MaxingMatrix(Matrix):
+  def Add(self, coord, val):
+    self.data[coord] = max(val, self.data.get(coord, val))
 
 class AppendingMatrix(Matrix):
   def Add(self, coord, val):
@@ -278,10 +293,13 @@ class AppendingMatrix(Matrix):
       self.data[coord].append(val)
     else:
       self.data[coord] = [val]
-  def Reduce(self, reducer):
+
+  def Finalized(self):
+    printtime('combining coincident points')
+    dr=DiminishingReducer(options.decay)
     m = Matrix()
     for (coord, values) in self.iteritems():
-      m.Set(coord, reducer(values))
+      m.Set(coord, dr.Reduce(values))
     return m
 
 class DiminishingReducer():
@@ -508,7 +526,7 @@ class ImageSeriesMaker():
     if x - int(x) < self.frequency:
       self.frame_count += 1
       printtime('Frame %d of %d' % (self.frame_count, self.num_frames))
-      matrix = Finalize(matrix)
+      matrix = matrix.Finalized()
       self.image_maker.SavePNG(matrix, self.filename_template % self.frame_count,
                                self.width, self.height, self.bounding_box)
 
@@ -602,15 +620,9 @@ def _8bitInt_to_float(i):
   1fe, not 1ff.'''
   return float(i - int(i/256)) / 255
 
-def Finalize(matrix):
-  printtime('combining coincident points')
-  dr=DiminishingReducer(options.decay)
-  matrix = matrix.Reduce(dr.Reduce)
-  return matrix
-
 def ProcessShapes(shapes, projection, hook=None):
+  matrix = Matrix.MatrixFactory(options.decay)
   printtime('processing data')
-  matrix = AppendingMatrix()
   kernel = LinearKernel(options.radius)
   for shape in shapes:
     AddData(shape.Map(projection.Project), matrix, kernel)
@@ -782,7 +794,7 @@ def main():
         print 'The animation frames have been left in %s .' % tmpdir
     else:
       matrix = ProcessShapes(shapes, projection)
-      matrix = Finalize(matrix)
+      matrix = matrix.Finalized()
   if options.output and not options.animate:
     ImageMaker(colormap, options.background, background_image).SavePNG(matrix, options.output, options.width, options.height, bounding_box_xy)
 
