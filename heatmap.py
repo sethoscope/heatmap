@@ -22,7 +22,7 @@ from math import log,tan,sqrt
 from time import mktime,strptime
 from xml import sax
 
-version = '1.04'
+version = '1.05'
 
 class TrackLog:
   class Trkseg: # for GPX <trkseg> tags
@@ -534,7 +534,8 @@ def _GetOSMImage(bbox, zoom):
   # Just a wrapper for osm.createOSMImage to translate coordinate schemes
   try:
     from osmviz.manager import PILImageManager, OSMManager
-    osm = OSMManager(image_manager=PILImageManager('RGB'))
+    osm = OSMManager(image_manager=PILImageManager('RGB'),
+                     server=options.osm_base)
     ((lat1,lon1),(lat2,lon2)) = bbox.Corners()
     image,bounds = osm.createOSMImage((lat1,lat2,lon1,lon2), zoom)
     (lat1,lat2,lon1,lon2) = bounds
@@ -663,6 +664,7 @@ def setup_options():
   optparser.add_option('-G', '--gradient', metavar='FILE', help='Take color gradient from this the first column of pixels in this image.  Overrides -m and -M.')
 
   optparser.add_option('', '--osm', action='store_true', help='Composite onto OpenStreetMap tiles')
+  optparser.add_option('', '--osm_base', metavar='URL', default='http://tile.openstreetmap.org', help='Base URL for map tiles; default %default')
   optparser.add_option('-z', '--zoom', type='int', help='Zoom level for OSM; 0 (the default) means autozoom')
   optparser.add_option('-v', '--verbose', action='store_true')
   optparser.add_option('-V', '--version', action='store_true')
