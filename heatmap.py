@@ -22,7 +22,7 @@ from math import log,tan,sqrt
 from time import mktime,strptime
 from xml import sax
 
-version = '1.05'
+version = '1.06'
 
 class TrackLog:
   class Trkseg: # for GPX <trkseg> tags
@@ -59,9 +59,9 @@ class TrackLog:
     def endElement(self, name):
       if self.content:
         if self.tag_name_stack[-1] == 'time' and self.tag_name_stack[-2] == 'trkpt':
-          self.points[-1].time_str = self.content
-          self.content = self.content[:-1] + ' GMT' # Turn Z into GMT
-          self.points[-1].time = mktime(strptime(self.content, '%Y-%m-%dT%H:%M:%S %Z'))
+          # Turn Z into GMT and remove fractional seconds
+          timestr = self.content[:-1].split('.')[0] + ' GMT'
+          self.points[-1].time = mktime(strptime(timestr, '%Y-%m-%dT%H:%M:%S %Z'))
       self.tag_name_stack.pop()
         
     def characters(self, content):
