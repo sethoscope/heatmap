@@ -18,11 +18,12 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import sys
+import logging
 from math import log,tan,sqrt
 from time import mktime,strptime
 from xml import sax
 
-version = '1.06'
+version = '1.07'
 
 class TrackLog:
   class Trkseg: # for GPX <trkseg> tags
@@ -118,7 +119,7 @@ class Projection():
           pixels_per_degree = min(pixels_per_degree, pixels_per_lat)
     assert(pixels_per_degree > 0)
     self.SetScale(pixels_per_degree)
-    printtime('Scale: %f' % (111319.5 / pixels_per_degree))
+    logging.info('Scale: %f' % (111319.5 / pixels_per_degree))
 
 class EquirectangularProjection(Projection):  # Treats Lat/Lon as a square grid.
   # http://en.wikipedia.org/wiki/Equirectangular_projection
@@ -246,12 +247,12 @@ class Matrix:
   def MatrixFactory(cls, decay):
     # If decay is 0 or 1, we can accumulate as we go and save lots of memory.
     if decay == 1.0:
-      printtime('creating a summing matrix')
+      logging.info('creating a summing matrix')
       return SummingMatrix()
     elif decay == 0.0:
-      printtime('creating a maxing matrix')
+      logging.info('creating a maxing matrix')
       return MaxingMatrix()
-    printtime('creating an appending matrix')
+    logging.info('creating an appending matrix')
     return AppendingMatrix()
 
   def __init__(self):
@@ -295,7 +296,7 @@ class AppendingMatrix(Matrix):
       self.data[coord] = [val]
 
   def Finalized(self):
-    printtime('combining coincident points')
+    logging.info('combining coincident points')
     dr=DiminishingReducer(options.decay)
     m = Matrix()
     for (coord, values) in self.iteritems():
@@ -480,7 +481,7 @@ class ImageMaker():
     ((minX,minY), (maxX,maxY)) = bounding_box.Corners()
     width = maxX - minX + 1
     height = maxY - minY + 1
-    printtime('saving image (%d x %d)' % (width, height))
+    logging.info('saving image (%d x %d)' % (width, height))
     
     from PIL import Image
     if self.background:
@@ -525,7 +526,7 @@ class ImageSeriesMaker():
     x = self.input_count * self.frequency   # frequency <= 1
     if x - int(x) < self.frequency:
       self.frame_count += 1
-      printtime('Frame %d of %d' % (self.frame_count, self.num_frames))
+      logging.info('Frame %d of %d' % (self.frame_count, self.num_frames))
       matrix = matrix.Finalized()
       self.image_maker.SavePNG(matrix, self.filename_template % self.frame_count,
                                self.width, self.height, self.bounding_box)
@@ -541,9 +542,9 @@ def _GetOSMImage(bbox, zoom):
     (lat1,lat2,lon1,lon2) = bounds
     return image, BoundingBox(corners=((lat1,lon1),(lat2,lon2)))
   except ImportError, e:
-    sys.stderr.write("\nImportError: %s.\n"
-                     "The --osm option depends on the osmviz module, available from\n"
-                     "http://cbick.github.com/osmviz/\n\n" % str(e))
+    logging.error("ImportError: %s.\n"
+                  "The --osm option depends on the osmviz module, available from\n"
+                  "http://cbick.github.com/osmviz/\n\n" % str(e))
     sys.exit(1)
 
   
@@ -561,7 +562,7 @@ def ChooseOSMZoom(bbox_ll, padding):
   proj = MercatorProjection()
   scale = _ScaleForOSMZoom(crazy_zoom_level)
   proj.SetScale(scale)
-  printtime('Scale: %f' % (111319.5 / scale))
+  logging.info('Scale: %f' % (111319.5 / scale))
   bbox_crazy_xy = bbox_ll.Map(proj.Project)
   if options.width:
     size_ratio = width_ratio = float(bbox_crazy_xy.SizeX()) / (options.width - 2*padding)
@@ -576,8 +577,7 @@ def ChooseOSMZoom(bbox_ll, padding):
   # in pixels, not scale factors).
   # TODO: This is off by a little bit at small scales.
   zoom = int(crazy_zoom_level - log(size_ratio, 2))
-  if options.verbose:
-    print 'Choosing OSM zoom level %d' % zoom
+  logging.info('Choosing OSM zoom level %d' % zoom)
   return zoom
 
 def GetOSMBackground(bbox_ll, padding):
@@ -603,12 +603,6 @@ def GetOSMBackground(bbox_ll, padding):
   return image, bbox_ll, proj
 
 
-import time
-t0 = time.time()
-def printtime(str):
-  if options.verbose:
-    print '%10.3f sec\t // %s' % (time.time() - t0, str)
-
 def _8bitInt_to_float(i):
   '''Primirily for scaling numbers from [0,255] to [0,1.0].  It will
   also work on numbers outside that range, but with some skew: every
@@ -623,7 +617,7 @@ def _8bitInt_to_float(i):
 
 def ProcessShapes(shapes, projection, hook=None):
   matrix = Matrix.MatrixFactory(options.decay)
-  printtime('processing data')
+  logging.info('processing data')
   kernel = LinearKernel(options.radius)
   for shape in shapes:
     AddData(shape.Map(projection.Project), matrix, kernel)
@@ -673,6 +667,7 @@ def setup_options():
 # Note to self: -m #0aa80ff00 -M #120ffffff is nice.
 
 def main():
+  logging.basicConfig(format='%(relativeCreated)8d ms  // %(message)s')
   optparser = setup_options()
   (options, args) = optparser.parse_args()
   globals()['options'] = options
@@ -681,6 +676,9 @@ def main():
     print '%s version %s' % (sys.argv[0], version)
     sys.exit(0)
 
+  if options.verbose:
+    logging.getLogger().setLevel(logging.INFO)
+    
   if not ((options.points or options.gpx or options.load) and (options.output or options.save)):
     sys.stderr.write("You must specify one input (-g -p -L) and at least one output (-o or -S).\n")
     sys.exit(1)
@@ -700,17 +698,16 @@ def main():
 
   matrix = None  # make the result available for load & save
   if options.load:
-    printtime('loading data')
+    logging.info('loading data')
     process_data = False
     import cPickle as pickle
     matrix = pickle.load(open(options.load))
   else:
     process_data = True
     if options.gpx:
-      printtime('reading GPX track')
+      logging.info('reading GPX track')
       track = TrackLog(options.gpx)
-      if options.verbose:
-        printtime('track length: %d points in %d segments' % (len(track), len(track.segments)))
+      logging.info('track length: %d points in %d segments' % (len(track), len(track.segments)))
       shapes = []
       for trkseg in track.segments:
         for i,p1 in enumerate(trkseg[:-1]):
@@ -718,7 +715,7 @@ def main():
           # We'll end up projecting every point twice, but this is the least of our performance problems.
           shapes.append(LineSegment(p1.coords, p2.coords))
     else:
-      printtime('reading points')
+      logging.info('reading points')
       shapes = []
       f = open(options.points)
       for line in f:
@@ -727,11 +724,10 @@ def main():
         (lat,lon) = values[0:2]
         weight = len(values) == 2 and 1.0 or values[2]
         shapes.append(Point((lat,lon), weight))
-      if options.verbose:
-        printtime('read %d points' % len(shapes))
+      logging.info('read %d points' % len(shapes))
       f.close()
 
-  printtime('Determining scale and scope')
+  logging.info('Determining scale and scope')
 
   bounding_box_ll = None
   bounding_box_xy_padding = options.margin
@@ -767,16 +763,14 @@ def main():
     projection.AutoSetScale(bounding_box_ll, bounding_box_xy_padding)
   bounding_box_xy = bounding_box_ll.Map(projection.Project)
   bounding_box_xy.Grow(bounding_box_xy_padding)
-  if not options.extent and options.verbose:
-    actual_bounding_box_ll = bounding_box_xy.Map(projection.InverseProject)
-    printtime('Map extent: %s' % actual_bounding_box_ll.Extent())
+  if not options.extent:
+    logging.info('Map extent: %s' % bounding_box_xy.Map(projection.InverseProject).Extent())
 
   if process_data:
     if options.animate:
       import tempfile, os.path, shutil, subprocess
       tmpdir = tempfile.mkdtemp()
-      if options.verbose:
-        printtime('Putting animation frames in %s' % tmpdir)
+      logging.info('Putting animation frames in %s' % tmpdir)
       imgfile_template = os.path.join(tmpdir, 'frame-%05d.png')
       maker = ImageSeriesMaker(colormap, options.background, background_image, imgfile_template,
                                min(options.frames, len(shapes)), len(shapes), options.width, options.height, bounding_box_xy)
@@ -788,12 +782,12 @@ def main():
       if options.ffmpegopts:
         command.extend(options.ffmpegopts.split()) # I hope they don't have spaces in their arguments
       command.append(options.output) # output filename must be last
-      printtime('Encoding video: %s' % ' '.join(command))
+      logging.info('Encoding video: %s' % ' '.join(command))
       subprocess.call(command)
       if not options.keepframes:
         shutil.rmtree(tmpdir)
       else:
-        print 'The animation frames have been left in %s .' % tmpdir
+        logging.info('The animation frames are in %s' % tmpdir)
     else:
       matrix = ProcessShapes(shapes, projection)
       matrix = matrix.Finalized()
@@ -801,12 +795,12 @@ def main():
     ImageMaker(colormap, options.background, background_image).SavePNG(matrix, options.output, options.width, options.height, bounding_box_xy)
 
   if options.save:
-    printtime('saving data')
+    logging.info('saving data')
     import cPickle as pickle
     matrix.projection = projection
     pickle.dump(matrix, open(options.save, 'w'), 2)
 
-  printtime('end')
+  logging.info('end')
 
 if __name__ == '__main__':
   main()
