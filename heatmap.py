@@ -632,6 +632,8 @@ def setup_options():
   optparser = OptionParser()
   optparser.add_option('-g', '--gpx', metavar='FILE')
   optparser.add_option('-p', '--points', metavar='FILE', help='File containing one space-separated coordinate pair per line, with optional point value as third term.')
+  optparser.add_option('-c', '--csv', metavar='FILE', help='File containing one comma-separated coordinate pair per line, the rest of the line is ignored.')
+  optparser.add_option('', '--ignore_csv_header', action='store_true', help='If csv has an initial header line, skip it.')
 
   optparser.add_option('-s', '--scale', metavar='FLOAT', type='float', help='meters per pixel, approximate'),
   optparser.add_option('-W', '--width', metavar='INT', type='int', help='width of output image'),
@@ -679,13 +681,13 @@ def main():
   if options.verbose:
     logging.getLogger().setLevel(logging.INFO)
     
-  if not ((options.points or options.gpx or options.load) and (options.output or options.save)):
-    sys.stderr.write("You must specify one input (-g -p -L) and at least one output (-o or -S).\n")
+  if not ((options.points or options.gpx or options.csv or options.load) and (options.output or options.save)):
+    sys.stderr.write("You must specify one input (-g -p -c -L) and at least one output (-o or -S).\n")
     sys.exit(1)
 
-  if (options.gpx or options.points) and not ((options.width or options.height or options.scale or options.background_image)
+  if (options.gpx or options.points or  options.csv) and not ((options.width or options.height or options.scale or options.background_image)
                                              or (options.osm and options.zoom)):
-    sys.stderr.write("With --gpx or --points, you must also specify at least one of --width, --height,\n --scale, or --background_image, or both --osm and --zoom.\n")
+    sys.stderr.write("With --gpx, --points or --csv, you must also specify at least one of --width, --height,\n --scale, or --background_image, or both --osm and --zoom.\n")
     sys.exit(1)
 
   if options.output:
@@ -714,7 +716,7 @@ def main():
           p2=trkseg[i+1]
           # We'll end up projecting every point twice, but this is the least of our performance problems.
           shapes.append(LineSegment(p1.coords, p2.coords))
-    else:
+    elif options.points:
       logging.info('reading points')
       shapes = []
       f = open(options.points)
@@ -725,6 +727,23 @@ def main():
         weight = len(values) == 2 and 1.0 or values[2]
         shapes.append(Point((lat,lon), weight))
       logging.info('read %d points' % len(shapes))
+      f.close()
+    else:
+      logging.info('reading csv')
+      import csv
+      rows = []
+      shapes = []
+      with open(options.csv, 'rb') as f:
+        reader = csv.reader(f)
+        if options.ignore_csv_header:
+          reader.next() # Skip header line
+        for row in reader:
+          values = [float(row[0]), float(row[1])]
+          assert len(values) == 2, 'input lines must have two: %s' % line
+          (lat,lon) = values[0:2]
+          weight = 1.0
+          shapes.append(Point((lat,lon), weight))
+        logging.info('read %d points' % len(shapes))
       f.close()
 
   logging.info('Determining scale and scope')
