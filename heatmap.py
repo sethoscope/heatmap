@@ -632,8 +632,8 @@ def setup_options():
   optparser = OptionParser()
   optparser.add_option('-g', '--gpx', metavar='FILE')
   optparser.add_option('-p', '--points', metavar='FILE', help='File containing one space-separated coordinate pair per line, with optional point value as third term.')
-  optparser.add_option('-c', '--csv', metavar='FILE', help='File containing one comma-separated coordinate pair per line, the rest of the line is ignored.')
-  optparser.add_option('', '--ignore_csv_header', action='store_true', help='If csv has an initial header line, skip it.')
+  optparser.add_option('', '--csv', metavar='FILE', help='File containing one comma-separated coordinate pair per line, the rest of the line is ignored.')
+  optparser.add_option('', '--ignore_csv_header', action='store_true', help='Ignore first line of CSV input file.')
 
   optparser.add_option('-s', '--scale', metavar='FLOAT', type='float', help='meters per pixel, approximate'),
   optparser.add_option('-W', '--width', metavar='INT', type='int', help='width of output image'),
@@ -682,7 +682,7 @@ def main():
     logging.getLogger().setLevel(logging.INFO)
     
   if not ((options.points or options.gpx or options.csv or options.load) and (options.output or options.save)):
-    sys.stderr.write("You must specify one input (-g -p -c -L) and at least one output (-o or -S).\n")
+    sys.stderr.write("You must specify one input (-g -p --csv -L) and at least one output (-o or -S).\n")
     sys.exit(1)
 
   if (options.gpx or options.points or  options.csv) and not ((options.width or options.height or options.scale or options.background_image)
@@ -731,20 +731,15 @@ def main():
     else:
       logging.info('reading csv')
       import csv
-      rows = []
       shapes = []
-      with open(options.csv, 'rb') as f:
+      with open(options.csv, 'rU') as f:
         reader = csv.reader(f)
         if options.ignore_csv_header:
           reader.next() # Skip header line
         for row in reader:
-          values = [float(row[0]), float(row[1])]
-          assert len(values) == 2, 'input lines must have two: %s' % line
-          (lat,lon) = values[0:2]
-          weight = 1.0
-          shapes.append(Point((lat,lon), weight))
+          (lat,lon) = (float(row[0]), float(row[1]))
+          shapes.append(Point((lat,lon)))
         logging.info('read %d points' % len(shapes))
-      f.close()
 
   logging.info('Determining scale and scope')
 
