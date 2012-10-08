@@ -21,64 +21,44 @@ import sys
 import logging
 from math import log,tan,sqrt
 from time import mktime,strptime
-from xml import sax
+import xml.etree.cElementTree as ET
 
-version = '1.07'
+version = '1.08'
 
 class TrackLog:
-  class Trkseg: # for GPX <trkseg> tags
-    def __init__(self, points=None):
-      self.points = points or []
-    def __len__(self):
-      return len(self.points)
-    def __getitem__(self, i):
-      return self.points[i]
+  class Trkseg(list): # for GPX <trkseg> tags
+    pass
 
   class Trkpt: # for GPX <trkpt> tags
     def __init__(self, lat, lon):
-      self.lat = float(lat)
-      self.lon = float(lon)
-      self.coords = (self.lat, self.lon)
+      self.coords = (float(lat), float(lon))
     def __str__(self):
-      return '%f,%f' % (self.lat, self.lon)
+      return '%f,%f' % self.coords
 
-  class _ParseHandler(sax.ContentHandler):
-    def startDocument(self):
-      self.tag_name_stack = []
-      self.points = []
-      self.segments = []
-
-    def startElement(self, name, attrs):
-      self.content = ''
-      self.tag_name_stack.append(name)
-      if name == 'trkpt':
-        self.points.append(TrackLog.Trkpt(attrs['lat'], attrs['lon']))
-        self.segments[-1].points.append(self.points[-1])
-      elif name == 'trkseg':
-        self.segments.append(TrackLog.Trkseg())
-
-    def endElement(self, name):
-      if self.content:
-        if self.tag_name_stack[-1] == 'time' and self.tag_name_stack[-2] == 'trkpt':
-          # Turn Z into GMT and remove fractional seconds
-          timestr = self.content[:-1].split('.')[0] + ' GMT'
-          self.points[-1].time = mktime(strptime(timestr, '%Y-%m-%dT%H:%M:%S %Z'))
-      self.tag_name_stack.pop()
+  def _Parse(self, filename):
+    for event, elem in ET.iterparse(filename, ('start', 'end')):
+      elem.tag = elem.tag[elem.tag.rfind('}')+1:]   # remove namespace
+      if elem.tag == "trkseg":
+        if event == 'start':
+          self.segments.append(TrackLog.Trkseg())
+        else: # event == 'end'
+          elem.clear() # delete contents from parse tree
+      elif elem.tag == 'trkpt' and event == 'end':
+        point = TrackLog.Trkpt(elem.attrib['lat'], elem.attrib['lon'])
+        self.segments[-1].append(point)
+        timestr = elem.findtext('time')
+        if timestr:
+          timestr = timestr[:-1].split('.')[0] + ' GMT'
+          point.time = mktime(strptime(timestr, '%Y-%m-%dT%H:%M:%S %Z'))
+        elem.clear() # clear the trkpt node to minimize memory usage
         
-    def characters(self, content):
-      self.content += content
-
   def __init__(self, filename):
-    handler = TrackLog._ParseHandler()
-    parser = sax.make_parser()
-    parser.setContentHandler(handler)
-    parser.parse(filename)
-    self.points = handler.points
-    self.segments = handler.segments
-  def __len__(self):
-    return len(self.points)
-  def __getitem__(self, i):
-    return self.points[i]
+    self.segments = []
+    logging.info('reading GPX track from %s' % filename)
+    self._Parse(filename)
+    logging.info('track length: %d points in %d segments'
+                 % (sum(len(seg) for seg in self.segments),
+                    len(self.segments)))
 
 class Projection():
   def SetScale(self, pixels_per_degree):
@@ -707,9 +687,7 @@ def main():
   else:
     process_data = True
     if options.gpx:
-      logging.info('reading GPX track')
       track = TrackLog(options.gpx)
-      logging.info('track length: %d points in %d segments' % (len(track), len(track.segments)))
       shapes = []
       for trkseg in track.segments:
         for i,p1 in enumerate(trkseg[:-1]):
