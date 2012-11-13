@@ -23,7 +23,7 @@ from math import log,tan,sqrt
 from time import mktime,strptime
 import xml.etree.cElementTree as ET
 
-version = '1.08'
+version = '1.09'
 
 class TrackLog:
   class Trkseg(list): # for GPX <trkseg> tags
@@ -699,11 +699,13 @@ def main():
       shapes = []
       f = open(options.points)
       for line in f:
-        values = [float(x) for x in line.strip().split()]
-        assert len(values) == 2 or len(values) == 3, 'input lines must have two or three values: %s' % line
-        (lat,lon) = values[0:2]
-        weight = len(values) == 2 and 1.0 or values[2]
-        shapes.append(Point((lat,lon), weight))
+        line = line.strip()
+        if len(line) > 0:  # ignore blank lines
+          values = [float(x) for x in line.split()]
+          assert len(values) == 2 or len(values) == 3, 'input lines must have two or three values: %s' % line
+          (lat,lon) = values[0:2]
+          weight = 1.0 if len(values) == 2 else values[2]
+          shapes.append(Point((lat,lon), weight))
       logging.info('read %d points' % len(shapes))
       f.close()
     else:
