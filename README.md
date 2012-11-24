@@ -31,8 +31,7 @@ indicate something.  This tool is not for that.
 A more thorough description and examples are posted at
  <http://sethoscope.net/heatmap/>
 
-
-# What next?
+## What next?
 
 Improvements I might one day get to, probably in this order:
 
@@ -43,3 +42,6 @@ Improvements I might one day get to, probably in this order:
  - pace animation according to data timestamps, rather than uniformly
  - provide some decent way to put results on a slippy map
 
+## Tests
+
+[![Build Status](https://secure.travis-ci.org/myint/heatmap.png)](http://secure.travis-ci.org/myint/heatmap)

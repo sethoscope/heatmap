@@ -1,0 +1,11 @@
+language: python
+
+python:
+    - "2.7"
+
+install:
+    - pip --quiet install pil
+
+script:
+    - ./heatmap.py -b black -p test/graffiti.coords -r 30 -W 1200 -o g1.ppm -P equirectangular
+    - file g1.ppm
