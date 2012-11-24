@@ -17,6 +17,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
+
 import sys
 import logging
 from math import log,tan,sqrt
@@ -105,11 +107,13 @@ class EquirectangularProjection(Projection):  # Treats Lat/Lon as a square grid.
   # http://en.wikipedia.org/wiki/Equirectangular_projection
   def SetScale(self, pixels_per_degree):
     self.pixels_per_degree = pixels_per_degree
-  def Project(self, (lat, lon)):
+  def Project(self, lat_lon):
+    (lat, lon) = lat_lon
     x = int(lon * self.pixels_per_degree)
     y = -int(lat * self.pixels_per_degree)
     return (x, y)
-  def InverseProject(self, (x,y)):
+  def InverseProject(self, x_y):
+    (x, y) = x_y
     lat = -y / self.pixels_per_degree
     lon = x / self.pixels_per_degree
     return (lat,lon)
@@ -122,11 +126,13 @@ class MercatorProjection(Projection):
   def SetScale(self, pixels_per_degree):
     self.pixels_per_degree = pixels_per_degree
     self.pixels_per_radian = pixels_per_degree * 57.295779513082323
-  def Project(self, (lat, lon)):
+  def Project(self, lat_lon):
+    (lat, lon) = lat_lon
     x = int(lon * self.pixels_per_degree)
     y = -int(self.pixels_per_radian * log(tan((0.78539816339744828 + 0.0087266462599716477 * lat))))  # -int(log(tan(pi/4 + pi/180 * lat / 2)))
     return (x, y)
-  def InverseProject(self, (x,y)):
+  def InverseProject(self, x_y):
+    (x,y) = x_y
     import math
     lat = (360 / math.pi * math.atan(math.exp(-y / self.pixels_per_radian)) - 90)
     lon = x / self.pixels_per_degree
@@ -163,7 +169,8 @@ class BoundingBox():
   def Extent(self):
     return '%s,%s,%s,%s' % (self.minX, self.minY, self.maxX, self.maxY)
     
-  def FromCorners(self, ((x1,y1),(x2,y2))):
+  def FromCorners(self, x1_y1_x2_y2):
+    ((x1,y1),(x2,y2)) = x1_y1_x2_y2
     self.minX = min(x1,x2)
     self.minY = min(y1,y2)
     self.maxX = max(x1,x2)
@@ -212,7 +219,8 @@ class BoundingBox():
       self.maxY += int(float(1 + height - current_height - fencepost) / 2) # round up
       self.minY = self.maxY - height + fencepost
 
-  def IsInside(self, (x,y)):
+  def IsInside(self, x_y):
+    (x,y) = x_y
     return x >= self.minX and x <= self.maxX and y >= self.minY and y <= self.maxY
 
   def Map(self, func):
@@ -245,7 +253,7 @@ class Matrix:
     self.data[coord] = val
 
   def iteritems(self):
-    return self.data.iteritems()
+    return self.data.items()
   def Max(self):
     return max(self.data.values())
   def items(self):
@@ -298,7 +306,8 @@ class DiminishingReducer():
     return total
 
 class Point:
-  def __init__(self, (x, y), weight=1.0):
+  def __init__(self, x_y, weight=1.0):
+    (x, y) = x_y
     self.x = x
     self.y = y
     self.weight = weight
@@ -306,7 +315,8 @@ class Point:
     return 'P(%s,%s)' % (self.x,self.y)
   def GeneralDistance(self, x, y):  # assumes square units, which causes distortion in some projections
     return (x ** 2 + y ** 2) ** 0.5
-  def Distance(self, (x,y)):
+  def Distance(self, x_y):
+    (x, y) =x_y
     return self.GeneralDistance(self.x - x, self.y - y)
   def MinX(self):
     return self.x
@@ -320,7 +330,9 @@ class Point:
     return Point(func((self.x, self.y)), self.weight)
     
 class LineSegment:
-  def __init__(self, (x1, y1), (x2, y2), weight=1.0):
+  def __init__(self, x1_y1, x2_y2, weight=1.0):
+    (x1, y1) = x1_y1
+    (x2, y2) = x2_y2
     self.x1 = x1
     self.x2 = x2
     self.y1 = y1
@@ -337,10 +349,11 @@ class LineSegment:
     return min(self.y1, self.y2)
   def MaxY(self):
     return max(self.y1, self.y2)
-  def Distance(self, (x,y)):
+  def Distance(self, x_y):
     # http://stackoverflow.com/questions/849211/shortest-distance-between-a-point-and-a-line-segment
     # http://www.topcoder.com/tc?d1=tutorials&d2=geometry1&module=Static#line_point_distance
     # http://local.wasp.uwa.edu.au/~pbourke/geometry/pointline/
+    (x, y) = x_y
     try:
       dx = (self.x2 - self.x1)
       dy = (self.y2 - self.y1)
@@ -419,10 +432,10 @@ class ColorMap:
     from colorsys import hsv_to_rgb
     hsva_min = [_8bitInt_to_float(x) for x in str2hsva(hsva_min_str)]
     hsva_max = [_8bitInt_to_float(x) for x in str2hsva(hsva_max_str)]
-    hsva_range = map(lambda min,max: max-min, hsva_min,hsva_max) # more useful this way
+    hsva_range = list(map(lambda min,max: max-min, hsva_min,hsva_max)) # more useful this way
     self.data = []
     for value in range(0,256):
-      hsva = map(lambda range,min: value / 255.0 * range + min, hsva_range, hsva_min)
+      hsva = list(map(lambda range,min: value / 255.0 * range + min, hsva_range, hsva_min))
       hsva[0] = hsva[0] % 1 # in case hue is out of range
       rgba = tuple([int(x * 255) for x in hsv_to_rgb(*hsva[0:3]) + (hsva[3],)])
       self.data.append(rgba)
@@ -521,7 +534,7 @@ def _GetOSMImage(bbox, zoom):
     image,bounds = osm.createOSMImage((lat1,lat2,lon1,lon2), zoom)
     (lat1,lat2,lon1,lon2) = bounds
     return image, BoundingBox(corners=((lat1,lon1),(lat2,lon2)))
-  except ImportError, e:
+  except ImportError as e:
     logging.error("ImportError: %s.\n"
                   "The --osm option depends on the osmviz module, available from\n"
                   "http://cbick.github.com/osmviz/\n\n" % str(e))
@@ -618,7 +631,9 @@ def setup_options():
   optparser.add_option('-s', '--scale', metavar='FLOAT', type='float', help='meters per pixel, approximate'),
   optparser.add_option('-W', '--width', metavar='INT', type='int', help='width of output image'),
   optparser.add_option('-H', '--height', metavar='INT', type='int', help='height of output image'),
-  optparser.add_option('-P', '--projection', metavar='NAME', type='choice', choices=projections.keys(), default='mercator', help='choices: ' + ', '.join(projections.keys()) + '; default: %default')
+  optparser.add_option('-P', '--projection', metavar='NAME', type='choice',
+                       choices=list(projections.keys()), default='mercator',
+                       help='choices: ' + ', '.join(projections.keys()) + '; default: %default')
   optparser.add_option('-e', '--extent', metavar='RANGE', help='Clip results to RANGE, which is specified as lat1,lon1,lat2,lon2; (for square mercator: -85.0511,-180,85.0511,180)')
   optparser.add_option('-R', '--margin', metavar='INT', type='int', default=0, help='Try to keep data at least this many pixels away from image border.')
   optparser.add_option('-r', '--radius', metavar='INT', type='int', default=15, help='pixel radius of point blobs; default: %default')
@@ -655,7 +670,7 @@ def main():
   globals()['options'] = options
 
   if options.version:
-    print '%s version %s' % (sys.argv[0], version)
+    print('%s version %s' % (sys.argv[0], version))
     sys.exit(0)
 
   if options.verbose:
