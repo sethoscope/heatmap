@@ -43,3 +43,7 @@ Improvements I might one day get to, probably in this order:
  - pace animation according to data timestamps, rather than uniformly
  - provide some decent way to put results on a slippy map
 
+
+# Tests
+
+[![Build Status](https://secure.travis-ci.org/myint/heatmap.png)](http://secure.travis-ci.org/myint/heatmap)
