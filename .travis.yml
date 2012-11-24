@@ -6,9 +6,9 @@ python:
 install:
     - if [ "$TRAVIS_PYTHON_VERSION" == "3.2" ]; then pip --quiet install git+https://github.com/sloonz/pil-py3k.git; else pip --quiet install pil; fi
     - pip --quiet install pil
-    - sudo apt-get install perceptualdiff
+    - sudo apt-get --quiet=2 install perceptualdiff
 
 script:
-    - ./heatmap.py -b black -p test/graffiti.coords -r 30 -W 1200 -o g1.ppm -P equirectangular
+    - ./heatmap.py -b black -p test/graffiti.coords -r 30 -W 300 -o g1.ppm -P equirectangular
     - file g1.ppm
     - perceptualdiff test/graffiti.ppm g1.ppm
