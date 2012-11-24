@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 #
 # heatmap.py - Generates heat map images and animations from geographic data
 # Copyright 2010 Seth Golub
