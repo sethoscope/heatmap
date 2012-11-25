@@ -10,6 +10,4 @@ install:
     - sudo apt-get --quiet=2 install perceptualdiff
 
 script:
-    - ./heatmap.py -b black -p test/graffiti.coords -r 30 -W 300 -o g1.ppm -P equirectangular
-    - file g1.ppm
-    - perceptualdiff test/graffiti.ppm g1.ppm
+    - ./test/test.py
