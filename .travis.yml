@@ -5,7 +5,7 @@ python:
     - "3.2"
 
 install:
-    - if [ "$TRAVIS_PYTHON_VERSION" == "3.2" ]; then pip --quiet install git+https://github.com/webitup/pil-py3k-mirror.git; else pip --quiet install pil; fi
+    - if [ "$TRAVIS_PYTHON_VERSION" == "3.2" ]; then pip --quiet install git+https://github.com/webitup/pil-py3k-mirror.git; fi
     - pip --quiet install pil
     - sudo apt-get --quiet=2 install perceptualdiff
 
