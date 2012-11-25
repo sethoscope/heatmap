@@ -7,5 +7,5 @@ install:
     - pip --quiet install pil
 
 script:
-    - ./heatmap.py -b black -p test/graffiti.coords -r 30 -W 1200 -o g1.ppm -P equirectangular
-    - file g1.ppm
+    - ./heatmap.py -b black -p test/few-points -r 3 -W 22 -o output.ppm -P equirectangular
+    - file output.ppm
