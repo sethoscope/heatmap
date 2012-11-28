@@ -4,8 +4,9 @@ python:
     - "2.7"
 
 install:
+    - if [ "$TRAVIS_PYTHON_VERSION" == "3.2" ]; then pip --quiet install git+https://github.com/webitup/pil-py3k-mirror.git; fi
     - pip --quiet install pil
+    - sudo apt-get --quiet=2 install perceptualdiff
 
 script:
-    - ./heatmap.py -b black -p test/few-points -r 3 -W 22 -o output.ppm -P equirectangular
-    - file output.ppm
+    - ./test/test.py
