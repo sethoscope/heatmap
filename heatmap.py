@@ -26,7 +26,7 @@ from time import mktime, strptime
 
 import xml.etree.cElementTree as ET
 
-version = '1.09'
+__version__ = '1.09'
 options = None
 
 
@@ -746,7 +746,7 @@ def ProcessShapes(shapes, projection, hook=None):
 def setup_options():
     # handy for other programs that use this as a module
     from optparse import OptionParser
-    optparser = OptionParser()
+    optparser = OptionParser(version=__version__)
     optparser.add_option('-g', '--gpx', metavar='FILE')
     optparser.add_option(
         '-p', '--points', metavar='FILE',
@@ -848,7 +848,6 @@ def setup_options():
         '-z', '--zoom', type='int',
         help='Zoom level for OSM; 0 (the default) means autozoom')
     optparser.add_option('-v', '--verbose', action='store_true')
-    optparser.add_option('-V', '--version', action='store_true')
     return optparser
 
 # Note to self: -m #0aa80ff00 -M #120ffffff is nice.
@@ -860,10 +859,6 @@ def main():
     logging.basicConfig(format='%(relativeCreated)8d ms  // %(message)s')
     optparser = setup_options()
     (options, args) = optparser.parse_args()
-
-    if options.version:
-        print('%s version %s' % (sys.argv[0], version))
-        sys.exit(0)
 
     if options.verbose:
         logging.getLogger().setLevel(logging.INFO)
