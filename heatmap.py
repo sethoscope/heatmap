@@ -21,8 +21,8 @@ from __future__ import print_function
 
 import sys
 import logging
-from math import log,tan,sqrt
-from time import mktime,strptime
+from math import log, tan, sqrt
+from time import mktime, strptime
 
 import xml.etree.cElementTree as ET
 
@@ -31,23 +31,24 @@ options = None
 
 
 class TrackLog:
-    class Trkseg(list): # for GPX <trkseg> tags
+    class Trkseg(list):  # for GPX <trkseg> tags
         pass
 
-    class Trkpt: # for GPX <trkpt> tags
+    class Trkpt:  # for GPX <trkpt> tags
         def __init__(self, lat, lon):
             self.coords = (float(lat), float(lon))
+
         def __str__(self):
             return '%f,%f' % self.coords
 
     def _Parse(self, filename):
         for event, elem in ET.iterparse(filename, ('start', 'end')):
-            elem.tag = elem.tag[elem.tag.rfind('}')+1:]   # remove namespace
+            elem.tag = elem.tag[elem.tag.rfind('}') + 1:]   # remove namespace
             if elem.tag == "trkseg":
                 if event == 'start':
                     self.segments.append(TrackLog.Trkseg())
-                else: # event == 'end'
-                    elem.clear() # delete contents from parse tree
+                else:  # event == 'end'
+                    elem.clear()  # delete contents from parse tree
             elif elem.tag == 'trkpt' and event == 'end':
                 point = TrackLog.Trkpt(elem.attrib['lat'], elem.attrib['lon'])
                 self.segments[-1].append(point)
@@ -56,24 +57,27 @@ class TrackLog:
                     timestr = timestr[:-1].split('.')[0] + ' GMT'
                     point.time = mktime(
                         strptime(timestr, '%Y-%m-%dT%H:%M:%S %Z'))
-                elem.clear() # clear the trkpt node to minimize memory usage
+                elem.clear()  # clear the trkpt node to minimize memory usage
 
     def __init__(self, filename):
         self.segments = []
         logging.info('reading GPX track from %s' % filename)
         self._Parse(filename)
         logging.info('track length: %d points in %d segments'
-                                 % (sum(len(seg) for seg in self.segments),
-                                        len(self.segments)))
+                     % (sum(len(seg) for seg in self.segments),
+                        len(self.segments)))
 
 
 class Projection():
     def SetScale(self, pixels_per_degree):
         raise NotImplemented
+
     def Project(self, coords):
         raise NotImplemented
+
     def InverseProject(self, coords):   # Not all projections can support this.
         raise NotImplemented
+
     def AutoSetScale(self, bounding_box_ll, padding):
         if options.scale:
             # Here we assume the Earth is a sphere of radius 6378137m.
@@ -100,7 +104,7 @@ class Projection():
             SCALE_FACTOR = 1000000.0
             self.SetScale(SCALE_FACTOR)
             bounding_box_xy = bounding_box_ll.Map(self.Project)
-            padding *= 2 # padding-per-edge -> padding-in-each-dimension
+            padding *= 2  # padding-per-edge -> padding-in-each-dimension
             if options.height:
                 # TODO: div by zero error if all data exists at a single point.
                 pixels_per_degree = pixels_per_lat = (
@@ -123,16 +127,18 @@ class EquirectangularProjection(Projection):
     # http://en.wikipedia.org/wiki/Equirectangular_projection
     def SetScale(self, pixels_per_degree):
         self.pixels_per_degree = pixels_per_degree
+
     def Project(self, lat_lon):
         (lat, lon) = lat_lon
         x = int(lon * self.pixels_per_degree)
         y = -int(lat * self.pixels_per_degree)
         return (x, y)
+
     def InverseProject(self, x_y):
         (x, y) = x_y
         lat = -y / self.pixels_per_degree
         lon = x / self.pixels_per_degree
-        return (lat,lon)
+        return (lat, lon)
 
 
 # If someone wants to use pixel coordinates instead of Lat/Lon, we
@@ -143,6 +149,7 @@ class MercatorProjection(Projection):
         # TODO: Get rid of magic numbers
         self.pixels_per_degree = pixels_per_degree
         self.pixels_per_radian = pixels_per_degree * 57.295779513082323
+
     def Project(self, lat_lon):
         (lat, lon) = lat_lon
         # TODO: Get rid of magic numbers
@@ -151,14 +158,15 @@ class MercatorProjection(Projection):
         y = -int(self.pixels_per_radian * log(
             tan((0.78539816339744828 + 0.0087266462599716477 * lat))))
         return (x, y)
+
     def InverseProject(self, x_y):
-        (x,y) = x_y
+        (x, y) = x_y
         import math
         lat = (
             360 / math.pi * math.atan(
                 math.exp(-y / self.pixels_per_radian)) - 90)
         lon = x / self.pixels_per_degree
-        return (lat,lon)
+        return (lat, lon)
 
 projections = {
     'equirectangular': EquirectangularProjection,
@@ -184,8 +192,8 @@ class BoundingBox():
         elif shapes:
             self.FromShapes(shapes)
         elif string:
-            (lat1,lon1,lat2,lon2) = [float(f) for f in string.split(',')]
-            self.FromCorners(((lat1,lon1),(lat2,lon2)))
+            (lat1, lon1, lat2, lon2) = [float(f) for f in string.split(',')]
+            self.FromCorners(((lat1, lon1), (lat2, lon2)))
         else:
             raise ValueError('BoundingBox must be initialized')
 
@@ -193,19 +201,20 @@ class BoundingBox():
         return '%s,%s,%s,%s  (%sx%s)' % (
             self.minX, self.minY, self.maxX, self.maxY, self.SizeX(),
             self.SizeY())
+
     def Extent(self):
         return '%s,%s,%s,%s' % (self.minX, self.minY, self.maxX, self.maxY)
 
     def FromCorners(self, x1_y1_x2_y2):
-        ((x1,y1),(x2,y2)) = x1_y1_x2_y2
-        self.minX = min(x1,x2)
-        self.minY = min(y1,y2)
-        self.maxX = max(x1,x2)
-        self.maxY = max(y1,y2)
+        ((x1, y1), (x2, y2)) = x1_y1_x2_y2
+        self.minX = min(x1, x2)
+        self.minY = min(y1, y2)
+        self.maxX = max(x1, x2)
+        self.maxY = max(y1, y2)
 
     def FromShapes(self, shapes):
         if not shapes:
-            return self.FromCorners(((0,0),(0,0)))
+            return self.FromCorners(((0, 0), (0, 0)))
         # We loop through four times, but the code is nice and clean.
         self.minX = min(s.MinX() for s in shapes)
         self.maxX = max(s.MaxX() for s in shapes)
@@ -250,7 +259,7 @@ class BoundingBox():
             self.minY = self.maxY - height + fencepost
 
     def IsInside(self, x_y):
-        (x,y) = x_y
+        (x, y) = x_y
         return (
             x >= self.minX and x <= self.maxX
             and y >= self.minY and y <= self.maxY)
@@ -260,14 +269,15 @@ class BoundingBox():
         corners of this one.  The expected use is to project a BoundingBox
         onto a map.  For example: bbox_xy = bbox_ll.Map(projector.Project)'''
         return BoundingBox(
-            corners=(func((self.minX,self.minY)),
-            func((self.maxX,self.maxY))))
+            corners=(func((self.minX, self.minY)),
+                     func((self.maxX, self.maxY))))
 
 
 class Matrix:
     @classmethod
     def MatrixFactory(cls, decay):
-        # If decay is 0 or 1, we can accumulate as we go and save lots of memory.
+        # If decay is 0 or 1, we can accumulate as we go and save lots of
+        # memory.
         if decay == 1.0:
             logging.info('creating a summing matrix')
             return SummingMatrix()
@@ -280,7 +290,7 @@ class Matrix:
     def __init__(self):
         self.data = {}  # sparse matrix, stored as {(x,y) : value}
 
-    def Add(self, coord, val, adder=lambda x,y: x+y):
+    def Add(self, coord, val, adder=lambda x, y: x + y):
         raise NotImplemented
 
     def Set(self, coord, val):
@@ -288,8 +298,10 @@ class Matrix:
 
     def iteritems(self):
         return self.data.items()
+
     def Max(self):
         return max(self.data.values())
+
     def items(self):
         return self.data.items()
 
@@ -322,7 +334,7 @@ class AppendingMatrix(Matrix):
 
     def Finalized(self):
         logging.info('combining coincident points')
-        dr=DiminishingReducer(options.decay)
+        dr = DiminishingReducer(options.decay)
         m = Matrix()
         for (coord, values) in self.iteritems():
             m.Set(coord, dr.Reduce(values))
@@ -341,6 +353,7 @@ class DiminishingReducer():
         Experiment with values between 0 and 1.  Values outside that range
         will give weird results.'''
         self.decay = decay
+
     def Reduce(self, values):
         # It would be nice to do this on the fly, while accumulating data, but
         # it needs to be insensitive to data order.
@@ -359,22 +372,30 @@ class Point:
         self.x = x
         self.y = y
         self.weight = weight
+
     def __str__(self):
-        return 'P(%s,%s)' % (self.x,self.y)
+        return 'P(%s,%s)' % (self.x, self.y)
+
     def GeneralDistance(self, x, y):
         # assumes square units, which causes distortion in some projections
         return (x ** 2 + y ** 2) ** 0.5
+
     def Distance(self, x_y):
-        (x, y) =x_y
+        (x, y) = x_y
         return self.GeneralDistance(self.x - x, self.y - y)
+
     def MinX(self):
         return self.x
+
     def MaxX(self):
         return self.x
+
     def MinY(self):
         return self.y
+
     def MaxY(self):
         return self.y
+
     def Map(self, func):
         return Point(func((self.x, self.y)), self.weight)
 
@@ -388,18 +409,25 @@ class LineSegment:
         self.y1 = y1
         self.y2 = y2
         self.weight = weight
-        self.length_squared = float((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1))
+        self.length_squared = float(
+            (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1))
+
     def __str__(self):
         return 'LineSegment((%s,%s), (%s,%s))' % (
             self.x1, self.y1, self.x2, self.y2)
+
     def MinX(self):
         return min(self.x1, self.x2)
+
     def MaxX(self):
         return max(self.x1, self.x2)
+
     def MinY(self):
         return min(self.y1, self.y2)
+
     def MaxY(self):
         return max(self.y1, self.y2)
+
     def Distance(self, x_y):
         # http://stackoverflow.com/questions/849211/shortest-distance-between-a-point-and-a-line-segment
         # http://www.topcoder.com/tc?d1=tutorials&d2=geometry1&module=Static#line_point_distance
@@ -417,7 +445,8 @@ class LineSegment:
             u = 0  # Our line is zero-length.  That's ok.
         dx = self.x1 + u * dx - x
         dy = self.y1 + u * dy - y
-        return sqrt(dx*dx + dy*dy)
+        return sqrt(dx * dx + dy * dy)
+
     def Map(self, func):
         xy1 = func((self.x1, self.y1))
         xy2 = func((self.x2, self.y2))
@@ -432,8 +461,9 @@ class LineSegment:
 class LinearKernel:
     '''Uses a linear falloff, essentially turning a point into a cone.'''
     def __init__(self, radius):
-        self.radius = radius # in pixels
-        self.radius_float = float(radius) # worthwhile time saver
+        self.radius = radius  # in pixels
+        self.radius_float = float(radius)  # worthwhile time saver
+
     def Heat(self, distance):
         if distance >= self.radius:
             return 0.0
@@ -447,16 +477,16 @@ def AddData(shape, matrix, kernel):
             matrix._heat_cache = {}
             for x in range(-kernel.radius, kernel.radius + 1):
                 for y in range(-kernel.radius, kernel.radius + 1):
-                    val = kernel.Heat(shape.GeneralDistance(x,y))
-                    matrix._heat_cache[(x,y)] = val
-                    matrix.Add((shape.x+x,shape.y+y), val)
+                    val = kernel.Heat(shape.GeneralDistance(x, y))
+                    matrix._heat_cache[(x, y)] = val
+                    matrix.Add((shape.x + x, shape.y + y), val)
         else:
             for x in range(-kernel.radius, kernel.radius + 1):
                 for y in range(-kernel.radius, kernel.radius + 1):
                     try:
                         matrix.Add(
-                            (shape.x+x,shape.y+y),
-                            shape.weight * matrix._heat_cache[(x,y)])
+                            (shape.x + x, shape.y + y),
+                            shape.weight * matrix._heat_cache[(x, y)])
                     except KeyError:
                         # zeros aren't stored in the cache, so we expect
                         # some misses
@@ -472,9 +502,9 @@ def AddData(shape, matrix, kernel):
             for y in range(
                     shape.MinY() - kernel.radius,
                     shape.MaxY() + kernel.radius + 1):
-                value = shape.weight * kernel.Heat(shape.Distance((x,y)))
+                value = shape.weight * kernel.Heat(shape.Distance((x, y)))
                 if value:
-                    matrix.Add((x,y), value)
+                    matrix.Add((x, y), value)
 
 
 def str2hsva(string):
@@ -482,9 +512,9 @@ def str2hsva(string):
     if string.startswith('#'):
         string = string[1:]  # Leading "#" was once required, is now optional.
     return (int(string[0:3], 16),
-                    int(string[3:5], 16),
-                    int(string[5:7], 16),
-                    int(string[7:9], 16))
+            int(string[3:5], 16),
+            int(string[5:7], 16),
+            int(string[7:9], 16))
 
 
 class ColorMap:
@@ -496,13 +526,13 @@ class ColorMap:
         hsva_min = [_8bitInt_to_float(x) for x in str2hsva(hsva_min_str)]
         hsva_max = [_8bitInt_to_float(x) for x in str2hsva(hsva_max_str)]
         # more useful this way
-        hsva_range = list(map(lambda min,max: max-min, hsva_min,hsva_max))
+        hsva_range = list(map(lambda min, max: max - min, hsva_min, hsva_max))
         self.data = []
-        for value in range(0,256):
+        for value in range(0, 256):
             hsva = list(map(
-                lambda range,min: value / 255.0 * range + min,
+                lambda range, min: value / 255.0 * range + min,
                 hsva_range, hsva_min))
-            hsva[0] = hsva[0] % 1 # in case hue is out of range
+            hsva[0] = hsva[0] % 1  # in case hue is out of range
             rgba = tuple(
                 [int(x * 255) for x in hsv_to_rgb(*hsva[0:3]) + (hsva[3],)])
             self.data.append(rgba)
@@ -513,14 +543,15 @@ class ColorMap:
         maxY = img.size[1] - 1
         self.data = []
         for value in range(256):
-            self.data.append(img.getpixel((0,maxY*(255-value)/255)))
+            self.data.append(img.getpixel((0, maxY * (255 - value) / 255)))
 
 
 def _blend_pixels(a, b):
     # a is RGBA, b is RGB; we could write this more generically,
     # but why complicate things?
     alpha = a[3] / 255.0
-    return tuple(map(lambda aa,bb: int(aa * alpha + bb * (1-alpha)), a[:3],b))
+    return tuple(
+        map(lambda aa, bb: int(aa * alpha + bb * (1 - alpha)), a[:3], b))
 
 
 class ImageMaker():
@@ -544,16 +575,16 @@ class ImageMaker():
         if not bounding_box:
             bounding_box = matrix.BoundingBox()
         bounding_box.ClipToSize(requested_width, requested_height)
-        ((minX,minY), (maxX,maxY)) = bounding_box.Corners()
+        ((minX, minY), (maxX, maxY)) = bounding_box.Corners()
         width = maxX - minX + 1
         height = maxY - minY + 1
         logging.info('saving image (%d x %d)' % (width, height))
 
         from PIL import Image
         if self.background:
-            img = Image.new('RGB', (width,height), self.background)
+            img = Image.new('RGB', (width, height), self.background)
         else:
-            img = Image.new('RGBA', (width,height))
+            img = Image.new('RGBA', (width, height))
 
         maxval = matrix.Max()
         pixels = img.load()
@@ -565,8 +596,8 @@ class ImageMaker():
         # over the points once, rather than once per image.  That also gives
         # the caller an opportunity to do something better for tiles that
         # contain no data.
-        for ((x,y), val) in matrix.iteritems():
-            if bounding_box.IsInside((x,y)):
+        for ((x, y), val) in matrix.iteritems():
+            if bounding_box.IsInside((x, y)):
                 if self.background:
                     pixels[x - minX, y - minY] = _blend_pixels(
                         self.colormap[int(255 * val / maxval)],
@@ -593,6 +624,7 @@ class ImageSeriesMaker():
         self.width = width
         self.height = height
         self.bounding_box = bounding_box
+
     def MaybeSaveImage(self, matrix):
         self.input_count += 1
         x = self.input_count * self.frequency   # frequency <= 1
@@ -613,10 +645,10 @@ def _GetOSMImage(bbox, zoom):
         osm = OSMManager(
             image_manager=PILImageManager('RGB'),
             server=options.osm_base)
-        ((lat1,lon1),(lat2,lon2)) = bbox.Corners()
-        image,bounds = osm.createOSMImage((lat1,lat2,lon1,lon2), zoom)
-        (lat1,lat2,lon1,lon2) = bounds
-        return image, BoundingBox(corners=((lat1,lon1),(lat2,lon2)))
+        ((lat1, lon1), (lat2, lon2)) = bbox.Corners()
+        image, bounds = osm.createOSMImage((lat1, lat2, lon1, lon2), zoom)
+        (lat1, lat2, lon1, lon2) = bounds
+        return image, BoundingBox(corners=((lat1, lon1), (lat2, lon2)))
     except ImportError as e:
         logging.error(
             "ImportError: %s.\n"
@@ -626,7 +658,7 @@ def _GetOSMImage(bbox, zoom):
 
 
 def _ScaleForOSMZoom(zoom):
-    return 256 * pow(2,zoom) / 360.0
+    return 256 * pow(2, zoom) / 360.0
 
 
 def ChooseOSMZoom(bbox_ll, padding):
@@ -644,10 +676,10 @@ def ChooseOSMZoom(bbox_ll, padding):
     bbox_crazy_xy = bbox_ll.Map(proj.Project)
     if options.width:
         size_ratio = width_ratio = (
-            float(bbox_crazy_xy.SizeX()) / (options.width - 2*padding))
+            float(bbox_crazy_xy.SizeX()) / (options.width - 2 * padding))
     if options.height:
         size_ratio = (
-            float(bbox_crazy_xy.SizeY()) / (options.height - 2*padding))
+            float(bbox_crazy_xy.SizeY()) / (options.height - 2 * padding))
         if options.width:
             size_ratio = max(size_ratio, width_ratio)
     # TODO: We use --height and --width as upper bounds, choosing a zoom
@@ -676,9 +708,9 @@ def GetOSMBackground(bbox_ll, padding):
     # an image of the requested dimensions.  Perhaps we should let the
     # user specify whether to treat the requested size as min,max,exact.
     (x_offset, y_offset) = map(
-        lambda a,b: a-b, bbox_xy.Corners()[0], img_bbox_xy.Corners()[0])
-    x_size = bbox_xy.SizeX()+1
-    y_size = bbox_xy.SizeY()+1
+        lambda a, b: a - b, bbox_xy.Corners()[0], img_bbox_xy.Corners()[0])
+    x_size = bbox_xy.SizeX() + 1
+    y_size = bbox_xy.SizeY() + 1
     image = image.crop((
         x_offset,
         y_offset,
@@ -697,7 +729,7 @@ def _8bitInt_to_float(i):
     #120ffffff, where a non-zero first digit lets hue wrap around the
     color wheel the opposite way.  ff would otherwise be equivalent to
     1fe, not 1ff.'''
-    return float(i - int(i/256)) / 255
+    return float(i - int(i / 256)) / 255
 
 
 def ProcessShapes(shapes, projection, hook=None):
@@ -742,8 +774,8 @@ def setup_options():
     optparser.add_option(
         '-P', '--projection', metavar='NAME', type='choice',
         choices=list(projections.keys()), default='mercator',
-        help='choices: ' + ', '.join(projections.keys()) + \
-            '; default: %default')
+        help='choices: ' + ', '.join(projections.keys()) +
+        '; default: %default')
     optparser.add_option(
         '-e', '--extent', metavar='RANGE',
         help=(
@@ -802,8 +834,8 @@ def setup_options():
     optparser.add_option(
         '-G', '--gradient', metavar='FILE',
         help=(
-                'Take color gradient from this the first column of pixels in '
-                'this image.  Overrides -m and -M.'))
+        'Take color gradient from this the first column of pixels in '
+        'this image.  Overrides -m and -M.'))
 
     optparser.add_option(
         '', '--osm', action='store_true',
@@ -820,6 +852,7 @@ def setup_options():
     return optparser
 
 # Note to self: -m #0aa80ff00 -M #120ffffff is nice.
+
 
 def main():
     global options
@@ -844,7 +877,7 @@ def main():
         sys.exit(1)
 
     if (
-            (options.gpx or options.points or  options.csv)
+            (options.gpx or options.points or options.csv)
             and not (
                 (
                     options.width or options.height or options.scale
@@ -876,8 +909,8 @@ def main():
             track = TrackLog(options.gpx)
             shapes = []
             for trkseg in track.segments:
-                for i,p1 in enumerate(trkseg[:-1]):
-                    p2=trkseg[i+1]
+                for i, p1 in enumerate(trkseg[:-1]):
+                    p2 = trkseg[i + 1]
                     # We'll end up projecting every point twice, but this is
                     # the least of our performance problems.
                     shapes.append(LineSegment(p1.coords, p2.coords))
@@ -891,9 +924,9 @@ def main():
                     values = [float(x) for x in line.split()]
                     assert len(values) == 2 or len(values) == 3, (
                         'input lines must have two or three values: %s' % line)
-                    (lat,lon) = values[0:2]
+                    (lat, lon) = values[0:2]
                     weight = 1.0 if len(values) == 2 else values[2]
-                    shapes.append(Point((lat,lon), weight))
+                    shapes.append(Point((lat, lon), weight))
             logging.info('read %d points' % len(shapes))
             f.close()
         else:
@@ -903,10 +936,10 @@ def main():
             with open(options.csv, 'rU') as f:
                 reader = csv.reader(f)
                 if options.ignore_csv_header:
-                    reader.next() # Skip header line
+                    reader.next()  # Skip header line
                 for row in reader:
-                    (lat,lon) = (float(row[0]), float(row[1]))
-                    shapes.append(Point((lat,lon)))
+                    (lat, lon) = (float(row[0]), float(row[1]))
+                    shapes.append(Point((lat, lon)))
                 logging.info('read %d points' % len(shapes))
 
     logging.info('Determining scale and scope')
@@ -952,7 +985,10 @@ def main():
 
     if process_data:
         if options.animate:
-            import tempfile, os.path, shutil, subprocess
+            import tempfile
+            import os.path
+            import shutil
+            import subprocess
             tmpdir = tempfile.mkdtemp()
             logging.info('Putting animation frames in %s' % tmpdir)
             imgfile_template = os.path.join(tmpdir, 'frame-%05d.png')
@@ -963,7 +999,7 @@ def main():
             hook = maker.MaybeSaveImage
             matrix = ProcessShapes(shapes, projection, hook)
             if maker.frame_count < options.frames:
-                hook(matrix) # one last one
+                hook(matrix)  # one last one
             command = ['ffmpeg', '-i', imgfile_template]
             if options.ffmpegopts:
                 # I hope they don't have spaces in their arguments
