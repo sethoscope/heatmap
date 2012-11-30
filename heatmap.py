@@ -70,13 +70,13 @@ class TrackLog:
 
 class Projection():
     def SetScale(self, pixels_per_degree):
-        raise NotImplemented
+        raise NotImplementedError
 
     def Project(self, coords):
-        raise NotImplemented
+        raise NotImplementedError
 
     def InverseProject(self, coords):   # Not all projections can support this.
-        raise NotImplemented
+        raise NotImplementedError
 
     def AutoSetScale(self, bounding_box_ll, padding):
         if options.scale:
@@ -291,7 +291,7 @@ class Matrix:
         self.data = {}  # sparse matrix, stored as {(x,y) : value}
 
     def Add(self, coord, val, adder=lambda x, y: x + y):
-        raise NotImplemented
+        raise NotImplementedError
 
     def Set(self, coord, val):
         self.data[coord] = val
