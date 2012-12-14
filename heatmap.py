@@ -580,7 +580,7 @@ class ImageMaker():
         height = maxY - minY + 1
         logging.info('saving image (%d x %d)' % (width, height))
 
-        from PIL import Image
+        import Image
         if self.background:
             img = Image.new('RGB', (width, height), self.background)
         else:
@@ -887,7 +887,7 @@ def main():
     if options.output:
         colormap = ColorMap()
         if options.gradient:
-            from PIL import Image
+            import Image
             colormap.FromImage(Image.open(options.gradient))
         else:
             colormap.FromHsvaRangeStrings(options.hsva_min, options.hsva_max)
@@ -956,7 +956,7 @@ def main():
 
     background_image = None
     if options.background_image:
-        from PIL import Image
+        import Image
         background_image = Image.open(options.background_image)
         (options.width, options.height) = background_image.size
     elif options.osm:
