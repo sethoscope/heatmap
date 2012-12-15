@@ -44,4 +44,4 @@ Improvements I might one day get to, probably in this order:
 
 ## Tests
 
-[![Build Status](https://secure.travis-ci.org/sethoscope/heatmap.png)](http://secure.travis-ci.org/sethoscope/heatmap)
+[![Build Status](https://travis-ci.org/sethoscope/heatmap.png?branch=master)](https://travis-ci.org/sethoscope/heatmap)
