@@ -23,6 +23,7 @@ import sys
 import logging
 from math import log, tan, sqrt
 from time import mktime, strptime
+from collections import defaultdict
 
 import xml.etree.cElementTree as ET
 
@@ -326,11 +327,11 @@ class MaxingMatrix(Matrix):
 
 
 class AppendingMatrix(Matrix):
+    def __init__(self):
+        self.data = defaultdict(list)
+
     def Add(self, coord, val):
-        if coord in self.data:
-            self.data[coord].append(val)
-        else:
-            self.data[coord] = [val]
+        self.data[coord].append(val)
 
     def Finalized(self):
         logging.info('combining coincident points')
@@ -474,7 +475,7 @@ def AddData(shape, matrix, kernel):
     # This caching cut the run time by 30%.
     if isinstance(shape, Point):
         if '_heat_cache' not in matrix.__dict__:   # first time
-            matrix._heat_cache = {}
+            matrix._heat_cache = defaultdict(int)
             for x in range(-kernel.radius, kernel.radius + 1):
                 for y in range(-kernel.radius, kernel.radius + 1):
                     val = kernel.Heat(shape.GeneralDistance(x, y))
@@ -483,14 +484,8 @@ def AddData(shape, matrix, kernel):
         else:
             for x in range(-kernel.radius, kernel.radius + 1):
                 for y in range(-kernel.radius, kernel.radius + 1):
-                    try:
-                        matrix.Add(
-                            (shape.x + x, shape.y + y),
-                            shape.weight * matrix._heat_cache[(x, y)])
-                    except KeyError:
-                        # zeros aren't stored in the cache, so we expect
-                        # some misses
-                        pass
+                    matrix.Add((shape.x + x, shape.y + y),
+                               shape.weight * matrix._heat_cache[(x, y)])
 
     else:
         # We iterate over every point in a bounding box around the given
