@@ -21,11 +21,13 @@ from __future__ import print_function
 
 import sys
 import logging
-from math import log, tan, sqrt, e
+import math
+import Image
+import ImageColor
 from time import mktime, strptime
 from collections import defaultdict
-
 import xml.etree.cElementTree as ET
+from colorsys import hsv_to_rgb
 
 __version__ = '1.10'
 options = None
@@ -155,14 +157,13 @@ class MercatorProjection(Projection):
         (lat, lon) = lat_lon
         # TODO: Get rid of magic numbers
         x = int(lon * self.pixels_per_degree)
-        # -int(log(tan(pi/4 + pi/180 * lat / 2)))
-        y = -int(self.pixels_per_radian * log(
-            tan((0.78539816339744828 + 0.0087266462599716477 * lat))))
+        # -int(math.log(math.tan(pi/4 + pi/180 * lat / 2)))
+        y = -int(self.pixels_per_radian * math.log(
+            math.tan((0.78539816339744828 + 0.0087266462599716477 * lat))))
         return (x, y)
 
     def InverseProject(self, x_y):
         (x, y) = x_y
-        import math
         lat = (
             360 / math.pi * math.atan(
                 math.exp(-y / self.pixels_per_radian)) - 90)
@@ -176,14 +177,14 @@ projections = {
 
 
 class BoundingBox():
-    '''This can be used for x,y or lat,lon; ints or floats.  It doesn't
+    '''This can be used for x,y or lat,lon; ints or floats.  It does not
     care which dimension is which, except that SizeX() and SizeY() refer
     to the first and second coordinate, regardless of which one is width
     and which is height.  (For Lat/Lon, SizeX() returns North/South
     extent.  This is confusing, but the alternative is to make assumptions
     based on whether the type (int or float) of the coordinates, which has
     too much hidden magic, or to let the caller set it in the constructor.
-    Instead we just require you to know what you're doing.  There's a
+    Instead we just require you to know what you are doing.  There is a
     similar opportunity for magic with the desire to count fenceposts
     rather than distance, and here too we ignore the issue and let the
     caller deal with it as needed.'''
@@ -446,7 +447,7 @@ class LineSegment:
             u = 0  # Our line is zero-length.  That's ok.
         dx = self.x1 + u * dx - x
         dy = self.y1 + u * dy - y
-        return sqrt(dx * dx + dy * dy)
+        return math.sqrt(dx * dx + dy * dy)
 
     def Map(self, func):
         xy1 = func((self.x1, self.y1))
@@ -477,11 +478,11 @@ class GaussianKernel:
         self.radius = radius
         # We set the scale such that the heat value drops to 1/256 of
         # the peak at a distance of radius.
-        self.scale = log(256) / radius
+        self.scale = math.log(256) / radius
 
     def Heat(self, distance):
         '''Returns 1.0 at center, 1/e at radius pixels from center.'''
-        return e ** (-distance * self.scale)
+        return math.e ** (-distance * self.scale)
 
 
 kernels = {
@@ -536,7 +537,6 @@ class ColorMap:
         return self.data[i]
 
     def FromHsvaRangeStrings(self, hsva_min_str, hsva_max_str):
-        from colorsys import hsv_to_rgb
         hsva_min = [_8bitInt_to_float(x) for x in str2hsva(hsva_min_str)]
         hsva_max = [_8bitInt_to_float(x) for x in str2hsva(hsva_max_str)]
         # more useful this way
@@ -580,7 +580,6 @@ class ImageMaker():
         self.background_image = background_image
         self.background = None
         if background and not background_image:
-            from PIL import ImageColor
             self.background = ImageColor.getrgb(background)
 
     def SavePNG(
@@ -594,7 +593,6 @@ class ImageMaker():
         height = maxY - minY + 1
         logging.info('saving image (%d x %d)' % (width, height))
 
-        import Image
         if self.background:
             img = Image.new('RGB', (width, height), self.background)
         else:
@@ -702,7 +700,7 @@ def ChooseOSMZoom(bbox_ll, padding):
     # as possible, whether larger or smaller (where "close" probably means
     # in pixels, not scale factors).
     # TODO: This is off by a little bit at small scales.
-    zoom = int(crazy_zoom_level - log(size_ratio, 2))
+    zoom = int(crazy_zoom_level - math.log(size_ratio, 2))
     logging.info('Choosing OSM zoom level %d' % zoom)
     return zoom
 
@@ -907,7 +905,6 @@ def main():
     if options.output:
         colormap = ColorMap()
         if options.gradient:
-            import Image
             colormap.FromImage(Image.open(options.gradient))
         else:
             colormap.FromHsvaRangeStrings(options.hsva_min, options.hsva_max)
@@ -932,18 +929,17 @@ def main():
         elif options.points:
             logging.info('reading points')
             shapes = []
-            f = open(options.points)
-            for line in f:
-                line = line.strip()
-                if len(line) > 0:  # ignore blank lines
-                    values = [float(x) for x in line.split()]
-                    assert len(values) == 2 or len(values) == 3, (
-                        'input lines must have two or three values: %s' % line)
-                    (lat, lon) = values[0:2]
-                    weight = 1.0 if len(values) == 2 else values[2]
-                    shapes.append(Point((lat, lon), weight))
-            logging.info('read %d points' % len(shapes))
-            f.close()
+            with open(options.points, 'rU') as f:
+                for line in f:
+                    line = line.strip()
+                    if len(line) > 0:  # ignore blank lines
+                        values = [float(x) for x in line.split()]
+                        assert len(values) == 2 or len(values) == 3, (
+                            'input lines must have two or three values: %s' % line)
+                        (lat, lon) = values[0:2]
+                        weight = 1.0 if len(values) == 2 else values[2]
+                        shapes.append(Point((lat, lon), weight))
+                logging.info('read %d points' % len(shapes))
         else:
             logging.info('reading csv')
             import csv
@@ -976,7 +972,6 @@ def main():
 
     background_image = None
     if options.background_image:
-        import Image
         background_image = Image.open(options.background_image)
         (options.width, options.height) = background_image.size
     elif options.osm:
