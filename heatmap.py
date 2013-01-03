@@ -854,7 +854,7 @@ def setup_options():
         '-k', '--kernel',
         type='choice',
         default='linear',
-        choices=kernels.keys(),
+        choices=list(kernels.keys()),
         help=('Kernel to use for the falling-off function; choices: ' +
               ', '.join(kernels.keys()) + '; default: %default'))
     optparser.add_option(
