@@ -21,13 +21,13 @@ from __future__ import print_function
 
 import sys
 import logging
-from math import log, tan, sqrt
+from math import log, tan, sqrt, e
 from time import mktime, strptime
 from collections import defaultdict
 
 import xml.etree.cElementTree as ET
 
-__version__ = '1.09'
+__version__ = '1.10'
 options = None
 
 
@@ -471,6 +471,25 @@ class LinearKernel:
         return 1.0 - (distance / self.radius_float)
 
 
+class GaussianKernel:
+    def __init__(self, radius):
+        '''radius is the distance beyond which you should not bother.'''
+        self.radius = radius
+        # We set the scale such that the heat value drops to 1/256 of
+        # the peak at a distance of radius.
+        self.scale = log(256) / radius
+
+    def Heat(self, distance):
+        '''Returns 1.0 at center, 1/e at radius pixels from center.'''
+        return e ** (-distance * self.scale)
+
+
+kernels = {
+    'linear': LinearKernel,
+    'gaussian': GaussianKernel,
+}
+
+
 def AddData(shape, matrix, kernel):
     # This caching cut the run time by 30%.
     if isinstance(shape, Point):
@@ -730,7 +749,7 @@ def _8bitInt_to_float(i):
 def ProcessShapes(shapes, projection, hook=None):
     matrix = Matrix.MatrixFactory(options.decay)
     logging.info('processing data')
-    kernel = LinearKernel(options.radius)
+    kernel = kernels[options.kernel](options.radius)
     for shape in shapes:
         AddData(shape.Map(projection.Project), matrix, kernel)
         if hook:
@@ -831,7 +850,13 @@ def setup_options():
         help=(
         'Take color gradient from this the first column of pixels in '
         'this image.  Overrides -m and -M.'))
-
+    optparser.add_option(
+        '-k', '--kernel',
+        type='choice',
+        default='linear',
+        choices=kernels.keys(),
+        help=('Kernel to use for the falling-off function; choices: ' +
+              ', '.join(kernels.keys()) + '; default: %default'))
     optparser.add_option(
         '', '--osm', action='store_true',
         help='Composite onto OpenStreetMap tiles')
