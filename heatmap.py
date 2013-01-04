@@ -883,21 +883,17 @@ def main():
     if options.verbose:
         logging.getLogger().setLevel(logging.INFO)
 
-    if not (
-            (options.points or options.gpx or options.csv or options.load)
+    if not ((options.points or options.gpx or options.csv or options.load)
             and (options.output or options.save)):
         sys.stderr.write(
             "You must specify one input (-g -p --csv -L) and at least one "
             "output (-o or -S).\n")
         sys.exit(1)
 
-    if (
-            (options.gpx or options.points or options.csv)
-            and not (
-                (
-                    options.width or options.height or options.scale
-                    or options.background_image)
-                or (options.osm and options.zoom))):
+    if ((options.gpx or options.points or options.csv)
+        and not ((options.width or options.height or options.scale
+                  or options.background_image)
+                 or (options.osm and options.zoom))):
         sys.stderr.write(
             "With --gpx, --points or --csv, you must also specify at least "
             "one of --width, --height,\n --scale, or --background_image, or "
