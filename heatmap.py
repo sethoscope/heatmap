@@ -149,17 +149,14 @@ class EquirectangularProjection(Projection):
 # but would be upside-down.
 class MercatorProjection(Projection):
     def SetScale(self, pixels_per_degree):
-        # TODO: Get rid of magic numbers
         self.pixels_per_degree = pixels_per_degree
-        self.pixels_per_radian = pixels_per_degree * 57.295779513082323
+        self.pixels_per_radian = pixels_per_degree * (180 / math.pi)
 
     def Project(self, lat_lon):
         (lat, lon) = lat_lon
-        # TODO: Get rid of magic numbers
         x = int(lon * self.pixels_per_degree)
-        # -int(math.log(math.tan(pi/4 + pi/180 * lat / 2)))
         y = -int(self.pixels_per_radian * math.log(
-            math.tan((0.78539816339744828 + 0.0087266462599716477 * lat))))
+            math.tan((math.pi/4 + math.pi/360 * lat))))
         return (x, y)
 
     def InverseProject(self, x_y):
