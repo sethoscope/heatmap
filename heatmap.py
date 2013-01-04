@@ -378,7 +378,8 @@ class Point:
     def __str__(self):
         return 'P(%s,%s)' % (self.x, self.y)
 
-    def GeneralDistance(self, x, y):
+    @staticmethod
+    def GeneralDistance(x, y):
         # assumes square units, which causes distortion in some projections
         return (x ** 2 + y ** 2) ** 0.5
 
@@ -397,6 +398,27 @@ class Point:
 
     def MaxY(self):
         return self.y
+
+    # From a modularity standpoint, it would be reasonable to cache
+    # distances, not heat values, and let the kernel cache the
+    # distance to heat map, but this is substantially faster.
+    heat_cache = {}
+    @classmethod
+    def InitializeHeatCache(cls, kernel):
+        cache = {}
+        for x in range(kernel.radius + 1):
+            for y in range(kernel.radius + 1):
+                cache[(x, y)] = kernel.Heat(cls.GeneralDistance(x, y))
+        cls.heat_cache[kernel] = cache
+
+    def AddHeatToMatrix(self, matrix, kernel):
+        if kernel not in Point.heat_cache:
+            Point.InitializeHeatCache(kernel)
+        cache = Point.heat_cache[kernel]
+        for dx in range(-kernel.radius, kernel.radius + 1):
+            for dy in range(-kernel.radius, kernel.radius + 1):
+                matrix.Add((self.x + dx, self.y + dy),
+                           self.weight * cache[(abs(dx), abs(dy))])
 
     def Map(self, func):
         return Point(func((self.x, self.y)), self.weight)
@@ -449,6 +471,19 @@ class LineSegment:
         dy = self.y1 + u * dy - y
         return math.sqrt(dx * dx + dy * dy)
 
+    def AddHeatToMatrix(self, matrix, kernel):
+        # Iterate over every point in a bounding box around this, with an
+        # extra margin given by the kernel's self-reported maximum range.
+        # TODO: There is probably a more clever iteration that skips more
+        # of the empty space.
+        for x in range(self.MinX() - kernel.radius,
+                       self.MaxX() + kernel.radius + 1):
+            for y in range(self.MinY() - kernel.radius,
+                           self.MaxY() + kernel.radius + 1):
+                heat = kernel.Heat(self.Distance((x, y)))
+                if heat:
+                    matrix.Add((x, y), self.weight * heat)
+
     def Map(self, func):
         xy1 = func((self.x1, self.y1))
         xy2 = func((self.x2, self.y2))
@@ -489,37 +524,6 @@ kernels = {
     'linear': LinearKernel,
     'gaussian': GaussianKernel,
 }
-
-
-def AddData(shape, matrix, kernel):
-    # This caching cut the run time by 30%.
-    if isinstance(shape, Point):
-        if '_heat_cache' not in matrix.__dict__:   # first time
-            matrix._heat_cache = defaultdict(int)
-            for x in range(-kernel.radius, kernel.radius + 1):
-                for y in range(-kernel.radius, kernel.radius + 1):
-                    val = kernel.Heat(shape.GeneralDistance(x, y))
-                    matrix._heat_cache[(x, y)] = val
-                    matrix.Add((shape.x + x, shape.y + y), val)
-        else:
-            for x in range(-kernel.radius, kernel.radius + 1):
-                for y in range(-kernel.radius, kernel.radius + 1):
-                    matrix.Add((shape.x + x, shape.y + y),
-                               shape.weight * matrix._heat_cache[(x, y)])
-
-    else:
-        # We iterate over every point in a bounding box around the given
-        # shape, with an extra margin given by the kernel's self-reported
-        # maximum range.
-        for x in range(
-                shape.MinX() - kernel.radius,
-                shape.MaxX() + kernel.radius + 1):
-            for y in range(
-                    shape.MinY() - kernel.radius,
-                    shape.MaxY() + kernel.radius + 1):
-                value = shape.weight * kernel.Heat(shape.Distance((x, y)))
-                if value:
-                    matrix.Add((x, y), value)
 
 
 def str2hsva(string):
@@ -749,7 +753,8 @@ def ProcessShapes(shapes, projection, hook=None):
     logging.info('processing data')
     kernel = kernels[options.kernel](options.radius)
     for shape in shapes:
-        AddData(shape.Map(projection.Project), matrix, kernel)
+        shape = shape.Map(projection.Project)
+        shape.AddHeatToMatrix(matrix, kernel)
         if hook:
             hook(matrix)
     return matrix
