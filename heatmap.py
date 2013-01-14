@@ -272,9 +272,11 @@ class BoundingBox():
                      func((self.maxX, self.maxY))))
 
 
-class Matrix:
-    @classmethod
-    def MatrixFactory(cls, decay):
+class Matrix(defaultdict):
+    '''An abstract sparse matrix, with data stored as {coord : value}.'''
+
+    @staticmethod
+    def MatrixFactory(decay):
         # If decay is 0 or 1, we can accumulate as we go and save lots of
         # memory.
         if decay == 1.0:
@@ -287,28 +289,13 @@ class Matrix:
         return AppendingMatrix()
 
     def __init__(self):
-        self.data = {}  # sparse matrix, stored as {(x,y) : value}
+        self.default_factory = float
 
-    def Add(self, coord, val, adder=lambda x, y: x + y):
+    def Add(self, coord, val):
         raise NotImplementedError
 
-    def Set(self, coord, val):
-        self.data[coord] = val
-
-    def iteritems(self):
-        return self.data.items()
-
-    def Max(self):
-        return max(self.data.values())
-
-    def items(self):
-        return self.data.items()
-
-    def Get(self, coord):
-        return self.data[coord]   # will throw KeyError for unset coord
-
     def BoundingBox(self):
-        return(BoundingBox(iter=self.data.iterkeys()))
+        return(BoundingBox(iter=self.keys()))
 
     def Finalized(self):
         return self
@@ -316,27 +303,27 @@ class Matrix:
 
 class SummingMatrix(Matrix):
     def Add(self, coord, val):
-        self.data[coord] = val + self.data.get(coord, 0.0)
+        self[coord] += val
 
 
 class MaxingMatrix(Matrix):
     def Add(self, coord, val):
-        self.data[coord] = max(val, self.data.get(coord, val))
+        self[coord] = max(val, self.get(coord, val))
 
 
 class AppendingMatrix(Matrix):
     def __init__(self):
-        self.data = defaultdict(list)
+        self.default_factory = list
 
     def Add(self, coord, val):
-        self.data[coord].append(val)
+        self[coord].append(val)
 
     def Finalized(self):
         logging.info('combining coincident points')
         dr = DiminishingReducer(options.decay)
         m = Matrix()
-        for (coord, values) in self.iteritems():
-            m.Set(coord, dr.Reduce(values))
+        for (coord, values) in self.items():
+            m[coord] = dr.Reduce(values)
         return m
 
 
@@ -599,7 +586,7 @@ class ImageMaker():
         else:
             img = Image.new('RGBA', (width, height))
 
-        maxval = matrix.Max()
+        maxval = max(matrix.values())
         pixels = img.load()
 
         # Iterating just over the non-zero data points is ideal when
@@ -609,7 +596,7 @@ class ImageMaker():
         # over the points once, rather than once per image.  That also gives
         # the caller an opportunity to do something better for tiles that
         # contain no data.
-        for ((x, y), val) in matrix.iteritems():
+        for ((x, y), val) in matrix.items():
             if bounding_box.IsInside((x, y)):
                 if self.background:
                     pixels[x - minX, y - minY] = _blend_pixels(
