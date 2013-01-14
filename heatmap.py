@@ -510,50 +510,59 @@ kernels = {
 }
 
 
-def str2hsva(string):
-    'Turns 06688bbff into (102, 136, 187, 255); the first number is 3 digits!'
-    if string.startswith('#'):
-        string = string[1:]  # Leading "#" was once required, is now optional.
-    return (int(string[0:3], 16),
-            int(string[3:5], 16),
-            int(string[5:7], 16),
-            int(string[7:9], 16))
+class ColorMap(list):
+
+    @staticmethod
+    def _str_to_float(string, base=16, maxval=256):
+        return float(int(string, base)) / maxval
+
+    @staticmethod
+    def str_to_hsva(string):
+        '''
+        Returns a 4-tuple of ints from a hex string color specification,
+        such that AAABBCCDD becomes AAA, BB, CC, DD.  For example,
+        str2hsva('06688bbff') returns (102, 136, 187, 255).  Note that
+        the first number is 3 digits.
+        '''
+        if string.startswith('#'):
+            string = string[1:]  # Leading "#" was once required, is now optional.
+        return tuple(ColorMap._str_to_float(s) for s in (string[0:3],
+                                                         string[3:5],
+                                                         string[5:7],
+                                                         string[7:9]))
 
 
-class ColorMap:
-    def __getitem__(self, i):
-        return self.data[i]
+    def __init__(self, hsva_min=None, hsva_max=None, image=None):
+        '''
+        Create a color map based on a progression in the specified
+        range, or using pixels in a provided image.
 
-    def FromHsvaRangeStrings(self, hsva_min_str, hsva_max_str):
-        hsva_min = [_8bitInt_to_float(x) for x in str2hsva(hsva_min_str)]
-        hsva_max = [_8bitInt_to_float(x) for x in str2hsva(hsva_max_str)]
-        # more useful this way
-        hsva_range = list(map(lambda min, max: max - min, hsva_min, hsva_max))
-        self.data = []
-        for value in range(0, 256):
-            hsva = list(map(
-                lambda range, min: value / 255.0 * range + min,
-                hsva_range, hsva_min))
-            hsva[0] = hsva[0] % 1  # in case hue is out of range
-            rgba = tuple(
-                [int(x * 255) for x in hsv_to_rgb(*hsva[0:3]) + (hsva[3],)])
-            self.data.append(rgba)
+        If supplied, hsva_min and hsva_max must each be a 4-tuple of
+        (hue, saturation, value, alpha), where each is a float from
+        0.0 to 1.0.  The gradient will be a linear progression from
+        hsva_min to hsva_max, including both ends of the range.
 
-    def FromImage(self, img):
-        assert img.mode == 'RGBA', (
-            'Gradient image must be RGBA.  Yours is %s.' % img.mode)
-        maxY = img.size[1] - 1
-        self.data = []
-        for value in range(256):
-            self.data.append(img.getpixel((0, maxY * (255 - value) / 255)))
+        '''
+        if hsva_min:
+            assert hsva_max is not None
+            # Turn (h1,s1,v1,a1), (h2,s2,v2,a2) into (h2-h1,s2-s1,v2-v1,a2-a1)
+            hsva_range = list(map(lambda min, max: max - min, hsva_min, hsva_max))
+            for value in range(0, 256):
+                hsva = list(map(
+                    lambda range, min: value / 255.0 * range + min,
+                    hsva_range, hsva_min))
+                hsva[0] = hsva[0] % 1  # in case hue is out of range
+                rgba = tuple(
+                    [int(x * 255) for x in hsv_to_rgb(*hsva[0:3]) + (hsva[3],)])
+                self.append(rgba)
 
-
-def _blend_pixels(a, b):
-    # a is RGBA, b is RGB; we could write this more generically,
-    # but why complicate things?
-    alpha = a[3] / 255.0
-    return tuple(
-        map(lambda aa, bb: int(aa * alpha + bb * (1 - alpha)), a[:3], b))
+        else:
+            assert image is not None
+            assert img.mode == 'RGBA', (
+                'Gradient image must be RGBA.  Yours is %s.' % img.mode)
+            maxY = img.size[1] - 1
+            for value in range(256):
+                self.append(img.getpixel((0, maxY * (255 - value) / 255)))
 
 
 class ImageMaker():
@@ -569,6 +578,15 @@ class ImageMaker():
         self.background = None
         if background and not background_image:
             self.background = ImageColor.getrgb(background)
+
+    @staticmethod
+    def _blend_pixels(a, b):
+        # a is RGBA, b is RGB; we could write this more generically,
+        # but why complicate things?
+        alpha = a[3] / 255.0
+        return tuple(
+            map(lambda aa, bb: int(aa * alpha + bb * (1 - alpha)), a[:3], b))
+
 
     def SavePNG(
             self, matrix, filename, requested_width=None,
@@ -599,7 +617,7 @@ class ImageMaker():
         for ((x, y), val) in matrix.items():
             if bounding_box.IsInside((x, y)):
                 if self.background:
-                    pixels[x - minX, y - minY] = _blend_pixels(
+                    pixels[x - minX, y - minY] = ImageMaker._blend_pixels(
                         self.colormap[int(255 * val / maxval)],
                         self.background)
                 else:
@@ -717,19 +735,6 @@ def GetOSMBackground(bbox_ll, padding):
         x_offset + x_size,
         y_offset + y_size))
     return image, bbox_ll, proj
-
-
-def _8bitInt_to_float(i):
-    '''Primirily for scaling numbers from [0,255] to [0,1.0].  It will
-    also work on numbers outside that range, but with some skew: every
-    256th place is ignored so that people writing in hex can write 1XX
-    in order to get 1.0 + _8bitInt_to_float(XX).  This is mathematically
-    incorrect, but rather convenient.  The only time anyone will give a
-    number outside [0,255] is on the command line, using strings like
-    #120ffffff, where a non-zero first digit lets hue wrap around the
-    color wheel the opposite way.  ff would otherwise be equivalent to
-    1fe, not 1ff.'''
-    return float(i - int(i / 256)) / 255
 
 
 def ProcessShapes(shapes, projection, hook=None):
@@ -855,8 +860,6 @@ def setup_options():
     optparser.add_option('-v', '--verbose', action='store_true')
     return optparser
 
-# Note to self: -m #0aa80ff00 -M #120ffffff is nice.
-
 
 def main():
     global options
@@ -886,11 +889,11 @@ def main():
         sys.exit(1)
 
     if options.output:
-        colormap = ColorMap()
         if options.gradient:
-            colormap.FromImage(Image.open(options.gradient))
+            colormap = ColorMap(image = Image.open(options.gradient))
         else:
-            colormap.FromHsvaRangeStrings(options.hsva_min, options.hsva_max)
+            colormap = ColorMap(hsva_min = ColorMap.str_to_hsva(options.hsva_min),
+                                hsva_max = ColorMap.str_to_hsva(options.hsva_max))
 
     matrix = None  # make the result available for load & save
     if options.load:
