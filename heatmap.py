@@ -794,11 +794,11 @@ def setup_options():
         '-e', '--extent', metavar='RANGE',
         help=(
             'Clip results to RANGE, which is specified as lat1,lon1,lat2,lon2;'
-            '(for square mercator: -85.0511,-180,85.0511,180)'))
+            ' (for square mercator: -85.0511,-180,85.0511,180)'))
     optparser.add_option(
         '-R', '--margin', metavar='INT', type='int', default=0,
         help=(
-            'Try to keep data at least this many pixels away from image'
+            'Try to keep data at least this many pixels away from image '
             'border.'))
     optparser.add_option(
         '-r', '--radius', metavar='INT', type='int', default=15,
@@ -809,12 +809,10 @@ def setup_options():
             'float in [0,1]; Larger values give more weight to data '
             'magnitude.  Smaller values are more democratic.  default:'
             '%default'))
-
     optparser.add_option(
         '-S', '--save', metavar='FILE', help='save processed data to FILE')
     optparser.add_option(
         '-L', '--load', metavar='FILE', help='load processed data from FILE')
-
     optparser.add_option(
         '-o', '--output', metavar='FILE',
         help='name of output file (image or video)')
