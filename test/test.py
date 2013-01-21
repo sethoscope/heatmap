@@ -57,5 +57,7 @@ class Tests(unittest.TestCase):
                 os.remove(output_file)
             except OSError:
                 pass  # perhaps it was never created
+
+
 if __name__ == '__main__':
     unittest.main()

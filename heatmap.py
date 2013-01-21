@@ -24,6 +24,10 @@ import logging
 import math
 import Image
 import ImageColor
+import tempfile
+import os.path
+import shutil
+import subprocess
 from time import mktime, strptime
 from collections import defaultdict
 import xml.etree.cElementTree as ET
@@ -147,6 +151,7 @@ class EquirectangularProjection(Projection):
 # If someone wants to use pixel coordinates instead of Lat/Lon, we
 # could add an XYProjection.  EquirectangularProjection would work,
 # but would be upside-down.
+
 class MercatorProjection(Projection):
     def SetScale(self, pixels_per_degree):
         self.pixels_per_degree = pixels_per_degree
@@ -161,9 +166,8 @@ class MercatorProjection(Projection):
 
     def InverseProject(self, x_y):
         (x, y) = x_y
-        lat = (
-            360 / math.pi * math.atan(
-                math.exp(-y / self.pixels_per_radian)) - 90)
+        lat = (360 / math.pi
+               * math.atan(math.exp(-y / self.pixels_per_radian)) - 90)
         lon = x / self.pixels_per_degree
         return (lat, lon)
 
@@ -226,7 +230,7 @@ class BoundingBox():
     # We use "SixeX" and "SizeY" instead of Width and Height because we
     # use these both for XY and LatLon, and they're in opposite order.
     # Rather than have the object try to keep track, we just choose not
-    # to need it.  In a strongly typed language, we'd could distinguish
+    # to need it.  In a strongly typed language, we could distinguish
     # between degrees and pixels.  We could do that here by overloading
     # floats and ints, but that would just be a different kind of
     # confusion and probably easier to make mistakes with.
@@ -630,18 +634,21 @@ class ImageMaker():
 
 
 class ImageSeriesMaker():
-    def __init__(
-            self, colormap, background, background_image, filename_template,
-            num_frames, total_points, width, height, bounding_box):
-        self.image_maker = ImageMaker(colormap, background, background_image)
-        self.filename_template = filename_template
-        self.num_frames = num_frames
-        self.frequency = float(num_frames) / total_points
+    '''Creates a movie showing the data appearing on the heatmap.'''
+    def __init__(self, shapes, colormap, projection, bounding_box):
+        self.image_maker = ImageMaker(colormap, options.background, options.background_image)
+        self.num_frames = min(options.frames, len(shapes))
+        self.frequency = float(self.num_frames) / len(shapes)
+        self.shapes = shapes
         self.input_count = 0
         self.frame_count = 0
-        self.width = width
-        self.height = height
+        self.width = options.width
+        self.height = options.height
         self.bounding_box = bounding_box
+        self.tmpdir = tempfile.mkdtemp()
+        self.projection = projection
+        self.imgfile_template = os.path.join(self.tmpdir, 'frame-%05d.png')
+
 
     def MaybeSaveImage(self, matrix):
         self.input_count += 1
@@ -652,8 +659,32 @@ class ImageSeriesMaker():
                 'Frame %d of %d' % (self.frame_count, self.num_frames))
             matrix = matrix.Finalized()
             self.image_maker.SavePNG(
-                matrix, self.filename_template % self.frame_count,
+                matrix, self.imgfile_template % self.frame_count,
                 self.width, self.height, self.bounding_box)
+
+
+    def CreateMovie(self):
+        command = ['ffmpeg', '-i', self.imgfile_template]
+        if options.ffmpegopts:
+            # I hope they don't have spaces in their arguments
+            command.extend(options.ffmpegopts.split())
+        command.append(options.output)
+        logging.info('Encoding video: %s' % ' '.join(command))
+        subprocess.call(command)
+
+
+    def MainLoop(self):
+        logging.info('Putting animation frames in %s' % self.tmpdir)
+        hook = self.MaybeSaveImage
+        matrix = ProcessShapes(self.shapes, self.projection, hook)
+        if self.frame_count < options.frames:
+            hook(matrix)  # one last one
+        self.CreateMovie()
+        if options.keepframes:
+            logging.info('The animation frames are in %s' % self.tmpdir)
+        else:
+            shutil.rmtree(self.tmpdir)
+        return matrix
 
 
 def _GetOSMImage(bbox, zoom):
@@ -981,36 +1012,12 @@ def main():
 
     if process_data:
         if options.animate:
-            import tempfile
-            import os.path
-            import shutil
-            import subprocess
-            tmpdir = tempfile.mkdtemp()
-            logging.info('Putting animation frames in %s' % tmpdir)
-            imgfile_template = os.path.join(tmpdir, 'frame-%05d.png')
-            maker = ImageSeriesMaker(
-                colormap, options.background, background_image,
-                imgfile_template, min(options.frames, len(shapes)),
-                len(shapes), options.width, options.height, bounding_box_xy)
-            hook = maker.MaybeSaveImage
-            matrix = ProcessShapes(shapes, projection, hook)
-            if maker.frame_count < options.frames:
-                hook(matrix)  # one last one
-            command = ['ffmpeg', '-i', imgfile_template]
-            if options.ffmpegopts:
-                # I hope they don't have spaces in their arguments
-                command.extend(options.ffmpegopts.split())
-            # output filename must be last
-            command.append(options.output)
-            logging.info('Encoding video: %s' % ' '.join(command))
-            subprocess.call(command)
-            if not options.keepframes:
-                shutil.rmtree(tmpdir)
-            else:
-                logging.info('The animation frames are in %s' % tmpdir)
+            animator = ImageSeriesMaker(shapes, colormap, projection, bounding_box_xy)
+            matrix = animator.MainLoop()
         else:
             matrix = ProcessShapes(shapes, projection)
             matrix = matrix.Finalized()
+
     if options.output and not options.animate:
         ImageMaker(colormap, options.background, background_image).SavePNG(
             matrix, options.output, options.width, options.height,
