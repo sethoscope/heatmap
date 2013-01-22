@@ -514,7 +514,7 @@ kernels = {
 }
 
 
-class ColorMap(list):
+class ColorMap:
 
     @staticmethod
     def _str_to_float(string, base=16, maxval=256):
@@ -536,7 +536,7 @@ class ColorMap(list):
                                                          string[7:9]))
 
 
-    def __init__(self, hsva_min=None, hsva_max=None, image=None):
+    def __init__(self, hsva_min=None, hsva_max=None, image=None, steps=None):
         '''
         Create a color map based on a progression in the specified
         range, or using pixels in a provided image.
@@ -546,28 +546,40 @@ class ColorMap(list):
         0.0 to 1.0.  The gradient will be a linear progression from
         hsva_min to hsva_max, including both ends of the range.
 
+        The optional steps argument specifies how many discrete steps
+        there should be in the color gradient.  When using hsva_min
+        and hsva_max, the default is 256.  With an image, the default
+        is to use as many rows as the image has.
+
         '''
+        self.values = []
         if hsva_min:
             assert hsva_max is not None
+            if steps is None:
+                steps = 256
             # Turn (h1,s1,v1,a1), (h2,s2,v2,a2) into (h2-h1,s2-s1,v2-v1,a2-a1)
             hsva_range = list(map(lambda min, max: max - min, hsva_min, hsva_max))
-            for value in range(0, 256):
+            for value in range(0, steps):
                 hsva = list(map(
-                    lambda range, min: value / 255.0 * range + min,
+                    lambda range, min: value / float(steps - 1) * range + min,
                     hsva_range, hsva_min))
                 hsva[0] = hsva[0] % 1  # in case hue is out of range
                 rgba = tuple(
                     [int(x * 255) for x in hsv_to_rgb(*hsva[0:3]) + (hsva[3],)])
-                self.append(rgba)
+                self.values.append(rgba)
 
         else:
             assert image is not None
             assert img.mode == 'RGBA', (
                 'Gradient image must be RGBA.  Yours is %s.' % img.mode)
             maxY = img.size[1] - 1
-            for value in range(256):
-                self.append(img.getpixel((0, maxY * (255 - value) / 255)))
+            if steps is None:
+                steps = img.size[1]
+            for value in range(steps):
+                self.values.append(img.getpixel((0, maxY * (steps - 1 - value) / (steps - 1))))
 
+    def __getitem__(self, floatval):
+        return self.values[int(floatval * (len(self.values) - 1))]
 
 class ImageMaker():
     def __init__(self, colormap, background=None, background_image=None):
@@ -622,11 +634,10 @@ class ImageMaker():
             if bounding_box.IsInside((x, y)):
                 if self.background:
                     pixels[x - minX, y - minY] = ImageMaker._blend_pixels(
-                        self.colormap[int(255 * val / maxval)],
+                        self.colormap[val / maxval],
                         self.background)
                 else:
-                    pixels[x - minX, y - minY] = self.colormap[int(
-                        255 * val / maxval)]
+                    pixels[x - minX, y - minY] = self.colormap[val / maxval]
         if self.background_image:
             # Is this really the best way?
             img = Image.composite(img, self.background_image, img.split()[3])
