@@ -570,13 +570,13 @@ class ColorMap:
 
         else:
             assert image is not None
-            assert img.mode == 'RGBA', (
+            assert image.mode == 'RGBA', (
                 'Gradient image must be RGBA.  Yours is %s.' % img.mode)
-            maxY = img.size[1] - 1
+            maxY = image.size[1] - 1
             if steps is None:
-                steps = img.size[1]
+                steps = image.size[1]
             for value in range(steps):
-                self.values.append(img.getpixel((0, maxY * (steps - 1 - value) / (steps - 1))))
+                self.values.append(image.getpixel((0, maxY * (steps - 1 - value) / (steps - 1))))
 
     def __getitem__(self, floatval):
         return self.values[int(floatval * (len(self.values) - 1))]
