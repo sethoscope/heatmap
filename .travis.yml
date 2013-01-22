@@ -4,9 +4,12 @@ python:
     - "2.7"
     - "3.2"
 
+before_install:
+    - sudo apt-get install zlib1g-dev
+    - sudo ln -s /usr/lib/`uname -i`-linux-gnu/libz.so ~/virtualenv/python2.7/lib/
+
 install:
     - if [ "$TRAVIS_PYTHON_VERSION" == "3.2" ]; then pip --quiet install git+https://github.com/sloonz/pil-py3k.git; fi
-    - sudo apt-get install zlib1g
     - pip install pil
     - sudo apt-get --quiet=2 install perceptualdiff
 
