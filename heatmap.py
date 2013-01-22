@@ -515,7 +515,6 @@ kernels = {
 
 
 class ColorMap:
-
     @staticmethod
     def _str_to_float(string, base=16, maxval=256):
         return float(int(string, base)) / maxval
@@ -535,8 +534,7 @@ class ColorMap:
                                                          string[5:7],
                                                          string[7:9]))
 
-
-    def __init__(self, hsva_min=None, hsva_max=None, image=None, steps=None):
+    def __init__(self, hsva_min=None, hsva_max=None, image=None, steps=256):
         '''
         Create a color map based on a progression in the specified
         range, or using pixels in a provided image.
@@ -554,8 +552,6 @@ class ColorMap:
         self.values = []
         if hsva_min:
             assert hsva_max is not None
-            if steps is None:
-                steps = 256
             # Turn (h1,s1,v1,a1), (h2,s2,v2,a2) into (h2-h1,s2-s1,v2-v1,a2-a1)
             hsva_range = list(map(lambda min, max: max - min, hsva_min, hsva_max))
             for value in range(0, steps):
@@ -576,6 +572,7 @@ class ColorMap:
 
     def get(self, floatval):
         return self.values[int(floatval * (len(self.values) - 1))]
+
 
 class ImageMaker():
     def __init__(self, colormap, background=None, background_image=None):
