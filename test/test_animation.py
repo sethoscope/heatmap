@@ -14,6 +14,7 @@ import heatmap as hm
 class Tests(unittest.TestCase):
 
     def test_animation(self):
+        '''Currently this only tests whether an output file is created.'''
         output_file = os.path.join(ROOT_DIR, 'test', 'output.mpeg')
         try:
             subprocess.check_call(
