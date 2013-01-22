@@ -547,9 +547,8 @@ class ColorMap:
         hsva_min to hsva_max, including both ends of the range.
 
         The optional steps argument specifies how many discrete steps
-        there should be in the color gradient.  When using hsva_min
-        and hsva_max, the default is 256.  With an image, the default
-        is to use as many rows as the image has.
+        there should be in the color gradient when using hsva_min
+        and hsva_max.
 
         '''
         self.values = []
@@ -567,18 +566,15 @@ class ColorMap:
                 rgba = tuple(
                     [int(x * 255) for x in hsv_to_rgb(*hsva[0:3]) + (hsva[3],)])
                 self.values.append(rgba)
-
         else:
             assert image is not None
             assert image.mode == 'RGBA', (
-                'Gradient image must be RGBA.  Yours is %s.' % img.mode)
-            maxY = image.size[1] - 1
-            if steps is None:
-                steps = image.size[1]
-            for value in range(steps):
-                self.values.append(image.getpixel((0, maxY * (steps - 1 - value) / (steps - 1))))
+                'Gradient image must be RGBA.  Yours is %s.' % image.mode)
+            num_rows = image.size[1]
+            self.values = [image.getpixel((0, row)) for row in range(num_rows)]
+            self.values.reverse()
 
-    def __getitem__(self, floatval):
+    def get(self, floatval):
         return self.values[int(floatval * (len(self.values) - 1))]
 
 class ImageMaker():
@@ -634,10 +630,10 @@ class ImageMaker():
             if bounding_box.IsInside((x, y)):
                 if self.background:
                     pixels[x - minX, y - minY] = ImageMaker._blend_pixels(
-                        self.colormap[val / maxval],
+                        self.colormap.get(val / maxval),
                         self.background)
                 else:
-                    pixels[x - minX, y - minY] = self.colormap[val / maxval]
+                    pixels[x - minX, y - minY] = self.colormap.get(val / maxval)
         if self.background_image:
             # Is this really the best way?
             img = Image.composite(img, self.background_image, img.split()[3])
