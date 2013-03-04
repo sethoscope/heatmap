@@ -22,8 +22,8 @@ from __future__ import print_function
 import sys
 import logging
 import math
-import Image
-import ImageColor
+from PIL import Image
+from PIL import ImageColor
 import tempfile
 import os.path
 import shutil
