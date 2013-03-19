@@ -1045,7 +1045,7 @@ def main():
     if options.save:
         logging.info('saving data')
         matrix['projection'] = projection
-        pickle.dump(matrix, open(options.save, 'w'), 2)
+        pickle.dump(matrix, open(options.save, 'wb'), 2)
 
     logging.info('end')
 
