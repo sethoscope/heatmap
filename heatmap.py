@@ -189,11 +189,13 @@ class BoundingBox():
     similar opportunity for magic with the desire to count fenceposts
     rather than distance, and here too we ignore the issue and let the
     caller deal with it as needed.'''
-    def __init__(self, corners=None, shapes=None, string=None):
+    def __init__(self, corners=None, shapes=None, string=None, coords=None):
         if corners:
             self.FromCorners(corners)
         elif shapes:
             self.FromShapes(shapes)
+        elif coords:
+            self.FromCoords(coords)
         elif string:
             (lat1, lon1, lat2, lon2) = [float(f) for f in string.split(',')]
             self.FromCorners(((lat1, lon1), (lat2, lon2)))
@@ -223,6 +225,15 @@ class BoundingBox():
         self.maxX = max(s.MaxX() for s in shapes)
         self.minY = min(s.MinY() for s in shapes)
         self.maxY = max(s.MaxY() for s in shapes)
+
+    def FromCoords(self, coords):
+        if not coords:
+            return self.FromCorners(((0, 0), (0, 0)))
+        # We loop through four times, but the code is nice and clean.
+        self.minX = min(c[0] for c in coords)
+        self.maxX = max(c[0] for c in coords)
+        self.minY = min(c[1] for c in coords)
+        self.maxY = max(c[1] for c in coords)
 
     def Corners(self):
         return ((self.minX, self.minY), (self.maxX, self.maxY))
@@ -292,14 +303,14 @@ class Matrix(defaultdict):
         logging.info('creating an appending matrix')
         return AppendingMatrix()
 
-    def __init__(self):
-        self.default_factory = float
+    def __init__(self, default_factory=float):
+        self.default_factory = default_factory
 
     def Add(self, coord, val):
         raise NotImplementedError
 
     def BoundingBox(self):
-        return(BoundingBox(iter=self.keys()))
+        return(BoundingBox(coords=self.keys()))
 
     def Finalized(self):
         return self
@@ -985,7 +996,8 @@ def main():
         # includes an extra kernel radius and use it to discard points that
         # are too far outside the extent to affect the output.
     elif options.load:
-        projection = matrix.projection
+        projection = matrix['projection']
+        del matrix['projection']
         bounding_box_ll = matrix.BoundingBox().Map(projection.InverseProject)
     else:
         bounding_box_ll = BoundingBox(shapes=shapes)
@@ -1030,7 +1042,7 @@ def main():
     if options.save:
         logging.info('saving data')
         import cPickle as pickle
-        matrix.projection = projection
+        matrix['projection'] = projection
         pickle.dump(matrix, open(options.save, 'w'), 2)
 
     logging.info('end')
