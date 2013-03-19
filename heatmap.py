@@ -32,6 +32,10 @@ from time import mktime, strptime
 from collections import defaultdict
 import xml.etree.cElementTree as ET
 from colorsys import hsv_to_rgb
+try:
+    import cPickle as pickle
+except ImportError:
+    import pickle
 
 __version__ = '1.10'
 options = None
@@ -945,7 +949,6 @@ def main():
     if options.load:
         logging.info('loading data')
         process_data = False
-        import cPickle as pickle
         matrix = pickle.load(open(options.load))
     else:
         process_data = True
@@ -1041,7 +1044,6 @@ def main():
 
     if options.save:
         logging.info('saving data')
-        import cPickle as pickle
         matrix['projection'] = projection
         pickle.dump(matrix, open(options.save, 'w'), 2)
 
