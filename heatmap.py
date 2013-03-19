@@ -949,7 +949,7 @@ def main():
     if options.load:
         logging.info('loading data')
         process_data = False
-        matrix = pickle.load(open(options.load))
+        matrix = pickle.load(open(options.load, 'rb'))
     else:
         process_data = True
         if options.gpx:
