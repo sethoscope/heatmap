@@ -79,9 +79,28 @@ class TrackLog:
                         len(self.segments)))
 
 
-class Projection():
-    def SetScale(self, pixels_per_degree):
-        raise NotImplementedError
+class Projection(object):
+    # For guessing scale, we pretend the earth is a sphere with this
+    # radius in meters, as in Web Mercator (the projection all the
+    # online maps use).
+    EARTH_RADIUS = 6378137  # in meters
+
+    def get_pixels_per_degree(self):
+        return self._pixels_per_degree
+
+    def set_pixels_per_degree(self, val):
+        self._pixels_per_degree = val
+        logging.info('scale: %f meters/pixel (%f pixels/degree)'
+                     % (self.meters_per_pixel, val))
+
+    def get_meters_per_pixel(self):
+        return 2 * math.pi * self.EARTH_RADIUS / 360 / self.pixels_per_degree
+
+    def set_meters_per_pixel(self, val):
+        self.pixels_per_degree = 2 * math.pi * self.EARTH_RADIUS / 360 / val
+        return val
+    pixels_per_degree = property(get_pixels_per_degree, set_pixels_per_degree)
+    meters_per_pixel = property(get_meters_per_pixel, set_meters_per_pixel)
 
     def Project(self, coords):
         raise NotImplementedError
@@ -90,65 +109,53 @@ class Projection():
         raise NotImplementedError
 
     def AutoSetScale(self, bounding_box_ll, padding):
-        if options.scale:
-            # Here we assume the Earth is a sphere of radius 6378137m.
-            # earth circumference @ equator is roughly 40075017 meters
-            # (in WGS-84)
-            # so meters per degree longitude at equator =~ 111319.5
-            # px/deg = m/deg * px/m
-            pixels_per_degree = 111319.5 / options.scale
-        else:
-            # We need to choose a scale at which the data's bounding box,
-            # once projected onto the map, will fit in the specified height
-            # and/or width.  The catch is that we can't project until we
-            # have a scale, so what we'll do is set a provisional scale,
-            # project the bounding box onto the map, then adjust the scale
-            # appropriately.  This way we don't need to know anything about
-            # the projection.
-            #
-            # Projection subclasses are free to override this method with
-            # something simpler that just solves for scale given the lat/lon
-            # and x/y bounds.
+        # We need to choose a scale at which the data's bounding box,
+        # once projected onto the map, will fit in the specified height
+        # and/or width.  The catch is that we can't project until we
+        # have a scale, so what we'll do is set a provisional scale,
+        # project the bounding box onto the map, then adjust the scale
+        # appropriately.  This way we don't need to know anything about
+        # the projection.
+        #
+        # Projection subclasses are free to override this method with
+        # something simpler that just solves for scale given the lat/lon
+        # and x/y bounds.
 
-            # xy coordinates are ints, so we'll work large
-            # to minimize roundoff error.
-            SCALE_FACTOR = 1000000.0
-            self.SetScale(SCALE_FACTOR)
-            bounding_box_xy = bounding_box_ll.Map(self.Project)
-            padding *= 2  # padding-per-edge -> padding-in-each-dimension
+        # xy coordinates are ints, so we'll work large
+        # to minimize roundoff error.
+        SCALE_FACTOR = 1000000.0
+        self.pixels_per_degree = SCALE_FACTOR
+        bounding_box_xy = bounding_box_ll.Map(self.Project)
+        padding *= 2  # padding-per-edge -> padding-in-each-dimension
+        if options.height:
+            # TODO: div by zero error if all data exists at a single point.
+            pixels_per_degree = pixels_per_lat = (
+                float(options.height - padding) /
+                bounding_box_xy.SizeY() * SCALE_FACTOR)
+        if options.width:
+            # TODO: div by zero error if all data exists at a single point.
+            pixels_per_degree = (
+                float(options.width - padding) /
+                bounding_box_xy.SizeX() * SCALE_FACTOR)
             if options.height:
-                # TODO: div by zero error if all data exists at a single point.
-                pixels_per_degree = pixels_per_lat = (
-                    float(options.height - padding) /
-                    bounding_box_xy.SizeY() * SCALE_FACTOR)
-            if options.width:
-                # TODO: div by zero error if all data exists at a single point.
-                pixels_per_degree = (
-                    float(options.width - padding) /
-                    bounding_box_xy.SizeX() * SCALE_FACTOR)
-                if options.height:
-                    pixels_per_degree = min(pixels_per_degree, pixels_per_lat)
+                pixels_per_degree = min(pixels_per_degree, pixels_per_lat)
         assert(pixels_per_degree > 0)
-        self.SetScale(pixels_per_degree)
-        logging.info('Scale: %f' % (111319.5 / pixels_per_degree))
+        self.pixels_per_degree = pixels_per_degree
 
 
 # Treats Lat/Lon as a square grid.
 class EquirectangularProjection(Projection):
     # http://en.wikipedia.org/wiki/Equirectangular_projection
-    def SetScale(self, pixels_per_degree):
-        self.pixels_per_degree = pixels_per_degree
-
     def Project(self, lat_lon):
         (lat, lon) = lat_lon
-        x = int(lon * self.pixels_per_degree)
-        y = -int(lat * self.pixels_per_degree)
+        x = int(lon * self._pixels_per_degree)
+        y = -int(lat * self._pixels_per_degree)
         return (x, y)
 
     def InverseProject(self, x_y):
         (x, y) = x_y
-        lat = -y / self.pixels_per_degree
-        lon = x / self.pixels_per_degree
+        lat = -y / self._pixels_per_degree
+        lon = x / self._pixels_per_degree
         return (lat, lon)
 
 
@@ -157,22 +164,26 @@ class EquirectangularProjection(Projection):
 # but would be upside-down.
 
 class MercatorProjection(Projection):
-    def SetScale(self, pixels_per_degree):
-        self.pixels_per_degree = pixels_per_degree
-        self.pixels_per_radian = pixels_per_degree * (180 / math.pi)
+    def get_pixels_per_degree(self):
+        return self._pixels_per_degree
+
+    def set_pixels_per_degree(self, val):
+        super(MercatorProjection, self).set_pixels_per_degree(val)
+        self._pixels_per_radian = val * (180 / math.pi)
+    pixels_per_degree = property(get_pixels_per_degree, set_pixels_per_degree)
 
     def Project(self, lat_lon):
         (lat, lon) = lat_lon
-        x = int(lon * self.pixels_per_degree)
-        y = -int(self.pixels_per_radian * math.log(
+        x = int(lon * self._pixels_per_degree)
+        y = -int(self._pixels_per_radian * math.log(
             math.tan((math.pi/4 + math.pi/360 * lat))))
         return (x, y)
 
     def InverseProject(self, x_y):
         (x, y) = x_y
         lat = (360 / math.pi
-               * math.atan(math.exp(-y / self.pixels_per_radian)) - 90)
-        lon = x / self.pixels_per_degree
+               * math.atan(math.exp(-y / self._pixels_per_radian)) - 90)
+        lon = x / self._pixels_per_degree
         return (lat, lon)
 
 projections = {
@@ -739,8 +750,7 @@ def ChooseOSMZoom(bbox_ll, padding):
     crazy_zoom_level = 30
     proj = MercatorProjection()
     scale = _ScaleForOSMZoom(crazy_zoom_level)
-    proj.SetScale(scale)
-    logging.info('Scale: %f' % (111319.5 / scale))
+    proj.pixels_per_degree = scale
     bbox_crazy_xy = bbox_ll.Map(proj.Project)
     if options.width:
         size_ratio = width_ratio = (
@@ -764,7 +774,7 @@ def ChooseOSMZoom(bbox_ll, padding):
 def GetOSMBackground(bbox_ll, padding):
     zoom = ChooseOSMZoom(bbox_ll, padding)
     proj = MercatorProjection()
-    proj.SetScale(_ScaleForOSMZoom(zoom))
+    proj.pixels_per_degree = _ScaleForOSMZoom(zoom)
     bbox_xy = bbox_ll.Map(proj.Project)
     # We're not checking that the padding fits within the specified size.
     bbox_xy.Grow(padding)
@@ -1022,7 +1032,10 @@ def main():
 
     if not projection:
         projection = projections[options.projection]()
-        projection.AutoSetScale(bounding_box_ll, bounding_box_xy_padding)
+        if options.scale:
+            projection.meters_per_pixel = options.scale
+        else:
+            projection.AutoSetScale(bounding_box_ll, bounding_box_xy_padding)
     bounding_box_xy = bounding_box_ll.Map(projection.Project)
     bounding_box_xy.Grow(bounding_box_xy_padding)
     if not options.extent:
