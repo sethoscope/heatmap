@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx
+ version="1.0"
+creator="GPSBabel - http://www.gpsbabel.org"
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+xmlns="http://www.topografix.com/GPX/1/0"
+xsi:schemaLocation="http://www.topografix.com/GPX/1/0 http://www.topografix.com/GPX/1/0/gpx.xsd">
+<time>2012-10-06T00:00:00Z</time>
+<trk>
+<trkseg>
+<trkpt lat="4.5" lon="2">    <time>2014-02-18T00:00:00Z</time></trkpt>
+<trkpt lat="5"   lon="2">    <time>2014-02-18T00:00:01Z</time></trkpt>
+</trkseg>
+
+<trkseg>
+<trkpt lat="4.5" lon="6">    <time>2014-02-18T00:00:02Z</time></trkpt>
+<trkpt lat="5"   lon="6">    <time>2014-02-18T00:00:03Z</time></trkpt>
+</trkseg>
+
+<trkseg>
+<trkpt lat="2"   lon="0">    <time>2014-02-18T00:00:04Z</time></trkpt>
+<trkpt lat="1"   lon="1">    <time>2014-02-18T00:00:05Z</time></trkpt>
+<trkpt lat="0"   lon="2">    <time>2014-02-18T00:00:06Z</time></trkpt>
+<trkpt lat="0"   lon="3">    <time>2014-02-18T00:00:07Z</time></trkpt>
+<trkpt lat="0"   lon="4">    <time>2014-02-18T00:00:08Z</time></trkpt>
+<trkpt lat="0"   lon="5">    <time>2014-02-18T00:00:09Z</time></trkpt>
+<trkpt lat="0"   lon="6">    <time>2014-02-18T00:00:10Z</time></trkpt>
+<trkpt lat="1"   lon="7">    <time>2014-02-18T00:00:11Z</time></trkpt>
+<trkpt lat="2"   lon="8">    <time>2014-02-18T00:00:12Z</time></trkpt>
+</trkseg>
+</trk>
+</gpx>
