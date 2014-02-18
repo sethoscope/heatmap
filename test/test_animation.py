@@ -25,7 +25,7 @@ class Tests(unittest.TestCase):
                  '-W', '22',
                  '-P', 'equirectangular',
                  '-a',
-                 '-f', '4',
+                 '--frequency', '1',
                  '-o', output_file])
 
             self.assertTrue(os.path.exists(output_file))

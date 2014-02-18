@@ -37,7 +37,7 @@ try:
 except ImportError:
     import pickle
 
-__version__ = '1.10'
+__version__ = '1.11'
 options = None
 
 
@@ -669,11 +669,8 @@ class ImageSeriesMaker():
     '''Creates a movie showing the data appearing on the heatmap.'''
     def __init__(self, shapes, colormap, projection, bounding_box):
         self.image_maker = ImageMaker(colormap, options.background, options.background_image)
-        self.num_frames = min(options.frames, len(shapes))
-        self.frequency = float(self.num_frames) / len(shapes)
+        self.frequency = options.frequency
         self.shapes = shapes
-        self.input_count = 0
-        self.frame_count = 0
         self.width = options.width
         self.height = options.height
         self.bounding_box = bounding_box
@@ -681,37 +678,45 @@ class ImageSeriesMaker():
         self.projection = projection
         self.imgfile_template = os.path.join(self.tmpdir, 'frame-%05d.png')
 
+    def _SaveImage(self, matrix):
+        self.frame_count += 1
+        logging.info('Frame %d' % (self.frame_count))
+        matrix = matrix.Finalized()
+        self.image_maker.SavePNG(
+            matrix, self.imgfile_template % self.frame_count,
+            self.width, self.height, self.bounding_box)
 
     def MaybeSaveImage(self, matrix):
-        self.input_count += 1
-        x = self.input_count * self.frequency   # frequency <= 1
-        if x - int(x) < self.frequency:
-            self.frame_count += 1
-            logging.info(
-                'Frame %d of %d' % (self.frame_count, self.num_frames))
-            matrix = matrix.Finalized()
-            self.image_maker.SavePNG(
-                matrix, self.imgfile_template % self.frame_count,
-                self.width, self.height, self.bounding_box)
+        self.inputs_since_output += 1
+        if self.inputs_since_output >= self.frequency:
+            self._SaveImage(matrix)
+            self.inputs_since_output = 0
 
 
-    def CreateMovie(self):
-        command = ['ffmpeg', '-i', self.imgfile_template]
-        if options.ffmpegopts:
+    @staticmethod
+    def CreateMovie(infiles, outfile, ffmpegopts):
+        command = ['ffmpeg', '-i', infiles]
+        if ffmpegopts:
             # I hope they don't have spaces in their arguments
-            command.extend(options.ffmpegopts.split())
-        command.append(options.output)
+            command.extend(ffmpegopts.split())
+        command.append(outfile)
         logging.info('Encoding video: %s' % ' '.join(command))
         subprocess.call(command)
 
 
+
     def MainLoop(self):
         logging.info('Putting animation frames in %s' % self.tmpdir)
-        hook = self.MaybeSaveImage
-        matrix = ProcessShapes(self.shapes, self.projection, hook)
-        if self.frame_count < options.frames:
-            hook(matrix)  # one last one
-        self.CreateMovie()
+        self.inputs_since_output = 0
+        self.frame_count = 0
+        matrix = ProcessShapes(self.shapes, self.projection,
+                               self.MaybeSaveImage)
+        if ( not self.frame_count
+             or self.inputs_since_output >= options.straggler_threshold ):
+            self._SaveImage(matrix)
+        self.CreateMovie(self.imgfile_template,
+                         options.output,
+                         options.ffmpegopts)
         if options.keepframes:
             logging.info('The animation frames are in %s' % self.tmpdir)
         else:
@@ -874,8 +879,11 @@ def setup_options():
         '-a', '--animate', action='store_true',
         help='Make an animation instead of a static image')
     optparser.add_option(
-        '-f', '--frames', type='int', default=30,
-        help='number of frames for animation; default: %default')
+        '', '--frequency', type='int', default=1,
+        help='input points per animation frame; default: %default')
+    optparser.add_option(
+        '', '--straggler_threshold', type='int', default=1,
+        help='add one more animation frame if >= this many inputs remain')
     optparser.add_option(
         '-F', '--ffmpegopts', metavar='STR',
         help='extra options to pass to ffmpeg when making an animation')
@@ -1010,7 +1018,6 @@ def main():
             shapes = shapes_from_csv(options.csv, options.ignore_csv_header)
         else:
             raise ValueError('no input file')
-        shapes = list(shapes)
         
     logging.info('Determining scale and scope')
 
@@ -1027,6 +1034,7 @@ def main():
         del matrix['projection']
         bounding_box_ll = matrix.BoundingBox().Map(projection.InverseProject)
     else:
+        shapes = list(shapes)
         bounding_box_ll = BoundingBox(shapes=shapes)
         bounding_box_xy_padding += options.radius   # Make room for the spread
 
