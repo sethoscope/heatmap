@@ -921,6 +921,44 @@ def setup_options():
     return optparser
 
 
+def shapes_from_gpx(filename):
+    track = TrackLog(filename)
+    for trkseg in track.segments:
+        for i, p1 in enumerate(trkseg[:-1]):
+            p2 = trkseg[i + 1]
+            yield LineSegment(p1.coords, p2.coords)
+
+def shapes_from_file(filename):
+    logging.info('reading points from %s' % filename)
+    count = 0
+    with open(filename, 'rU') as f:
+        for line in f:
+            line = line.strip()
+            if len(line) > 0:  # ignore blank lines
+                values = [float(x) for x in line.split()]
+                assert len(values) == 2 or len(values) == 3, (
+                    'input lines must have two or three values: %s' % line)
+                (lat, lon) = values[0:2]
+                weight = 1.0 if len(values) == 2 else values[2]
+                count += 1
+                yield Point((lat, lon), weight)
+        logging.info('read %d points' % count)
+
+def shapes_from_csv(filename, ignore_csv_header):
+    import csv
+    logging.info('reading csv')
+    count = 0
+    with open(filename, 'ru') as f:
+        reader = csv.reader(f)
+        if ignore_csv_header:
+            reader.next()  # Skip header line
+        for row in reader:
+            (lat, lon) = (float(row[0]), float(row[1]))
+            count += 1
+            yield Point((lat, lon))
+        logging.info('read %d points' % count)
+
+
 def main():
     global options
 
@@ -963,41 +1001,15 @@ def main():
     else:
         process_data = True
         if options.gpx:
-            track = TrackLog(options.gpx)
-            shapes = []
-            for trkseg in track.segments:
-                for i, p1 in enumerate(trkseg[:-1]):
-                    p2 = trkseg[i + 1]
-                    # We'll end up projecting every point twice, but this is
-                    # the least of our performance problems.
-                    shapes.append(LineSegment(p1.coords, p2.coords))
+            shapes = shapes_from_gpx(options.gpx)
         elif options.points:
-            logging.info('reading points')
-            shapes = []
-            with open(options.points, 'rU') as f:
-                for line in f:
-                    line = line.strip()
-                    if len(line) > 0:  # ignore blank lines
-                        values = [float(x) for x in line.split()]
-                        assert len(values) == 2 or len(values) == 3, (
-                            'input lines must have two or three values: %s' % line)
-                        (lat, lon) = values[0:2]
-                        weight = 1.0 if len(values) == 2 else values[2]
-                        shapes.append(Point((lat, lon), weight))
-                logging.info('read %d points' % len(shapes))
+            shapes = shapes_from_file(options.points)
+        elif options.csv:
+            shapes = shapes_from_csv(options.csv, options.ignore_csv_header)
         else:
-            logging.info('reading csv')
-            import csv
-            shapes = []
-            with open(options.csv, 'rU') as f:
-                reader = csv.reader(f)
-                if options.ignore_csv_header:
-                    reader.next()  # Skip header line
-                for row in reader:
-                    (lat, lon) = (float(row[0]), float(row[1]))
-                    shapes.append(Point((lat, lon)))
-                logging.info('read %d points' % len(shapes))
-
+            raise ValueError('no input file')
+        shapes = list(shapes)
+        
     logging.info('Determining scale and scope')
 
     bounding_box_ll = None
