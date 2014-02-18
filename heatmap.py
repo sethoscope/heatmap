@@ -53,16 +53,18 @@ class TrackLog:
             return '%f,%f' % self.coords
 
     def _Parse(self, filename):
+        self._segments = []
         for event, elem in ET.iterparse(filename, ('start', 'end')):
             elem.tag = elem.tag[elem.tag.rfind('}') + 1:]   # remove namespace
             if elem.tag == "trkseg":
                 if event == 'start':
-                    self.segments.append(TrackLog.Trkseg())
+                    self._segments.append(TrackLog.Trkseg())
                 else:  # event == 'end'
+                    yield self._segments.pop()
                     elem.clear()  # delete contents from parse tree
             elif elem.tag == 'trkpt' and event == 'end':
                 point = TrackLog.Trkpt(elem.attrib['lat'], elem.attrib['lon'])
-                self.segments[-1].append(point)
+                self._segments[-1].append(point)
                 timestr = elem.findtext('time')
                 if timestr:
                     timestr = timestr[:-1].split('.')[0] + ' GMT'
@@ -71,12 +73,12 @@ class TrackLog:
                 elem.clear()  # clear the trkpt node to minimize memory usage
 
     def __init__(self, filename):
-        self.segments = []
-        logging.info('reading GPX track from %s' % filename)
-        self._Parse(filename)
-        logging.info('track length: %d points in %d segments'
-                     % (sum(len(seg) for seg in self.segments),
-                        len(self.segments)))
+        self.filename = filename
+    
+    def segments(self):
+        '''Parse file and yield segments containing points'''
+        logging.info('reading GPX track from %s' % self.filename)
+        return self._Parse(self.filename)
 
 
 class Projection(object):
@@ -923,7 +925,7 @@ def setup_options():
 
 def shapes_from_gpx(filename):
     track = TrackLog(filename)
-    for trkseg in track.segments:
+    for trkseg in track.segments():
         for i, p1 in enumerate(trkseg[:-1]):
             p2 = trkseg[i + 1]
             yield LineSegment(p1.coords, p2.coords)
