@@ -88,7 +88,10 @@ class Projection(object):
     EARTH_RADIUS = 6378137  # in meters
 
     def get_pixels_per_degree(self):
-        return self._pixels_per_degree
+        try:
+            return self._pixels_per_degree
+        except AttributeError:
+            raise AttributeError('projection scale was never set')
 
     def set_pixels_per_degree(self, val):
         self._pixels_per_degree = val
@@ -101,6 +104,7 @@ class Projection(object):
     def set_meters_per_pixel(self, val):
         self.pixels_per_degree = 2 * math.pi * self.EARTH_RADIUS / 360 / val
         return val
+
     pixels_per_degree = property(get_pixels_per_degree, set_pixels_per_degree)
     meters_per_pixel = property(get_meters_per_pixel, set_meters_per_pixel)
 
@@ -150,14 +154,14 @@ class EquirectangularProjection(Projection):
     # http://en.wikipedia.org/wiki/Equirectangular_projection
     def Project(self, lat_lon):
         (lat, lon) = lat_lon
-        x = int(lon * self._pixels_per_degree)
-        y = -int(lat * self._pixels_per_degree)
+        x = int(lon * self.pixels_per_degree)
+        y = -int(lat * self.pixels_per_degree)
         return (x, y)
 
     def InverseProject(self, x_y):
         (x, y) = x_y
-        lat = -y / self._pixels_per_degree
-        lon = x / self._pixels_per_degree
+        lat = -y / self.pixels_per_degree
+        lon = x / self.pixels_per_degree
         return (lat, lon)
 
 
@@ -166,17 +170,15 @@ class EquirectangularProjection(Projection):
 # but would be upside-down.
 
 class MercatorProjection(Projection):
-    def get_pixels_per_degree(self):
-        return self._pixels_per_degree
-
     def set_pixels_per_degree(self, val):
         super(MercatorProjection, self).set_pixels_per_degree(val)
         self._pixels_per_radian = val * (180 / math.pi)
-    pixels_per_degree = property(get_pixels_per_degree, set_pixels_per_degree)
+    pixels_per_degree = property(Projection.get_pixels_per_degree,
+                                 set_pixels_per_degree)
 
     def Project(self, lat_lon):
         (lat, lon) = lat_lon
-        x = int(lon * self._pixels_per_degree)
+        x = int(lon * self.pixels_per_degree)
         y = -int(self._pixels_per_radian * math.log(
             math.tan((math.pi/4 + math.pi/360 * lat))))
         return (x, y)
@@ -185,7 +187,7 @@ class MercatorProjection(Projection):
         (x, y) = x_y
         lat = (360 / math.pi
                * math.atan(math.exp(-y / self._pixels_per_radian)) - 90)
-        lon = x / self._pixels_per_degree
+        lon = x / self.pixels_per_degree
         return (lat, lon)
 
 projections = {
