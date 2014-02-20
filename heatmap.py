@@ -114,7 +114,7 @@ class Projection(object):
     def InverseProject(self, coords):   # Not all projections can support this.
         raise NotImplementedError
 
-    def AutoSetScale(self, bounding_box_ll, padding, width=None, height=None):
+    def AutoSetScale(self, extent_in, padding, width=None, height=None):
         # We need to choose a scale at which the data's bounding box,
         # once projected onto the map, will fit in the specified height
         # and/or width.  The catch is that we can't project until we
@@ -131,18 +131,18 @@ class Projection(object):
         # to minimize roundoff error.
         SCALE_FACTOR = 1000000.0
         self.pixels_per_degree = SCALE_FACTOR
-        bounding_box_xy = bounding_box_ll.Map(self.Project)
+        extent_out = extent_in.Map(self.Project)
         padding *= 2  # padding-per-edge -> padding-in-each-dimension
         if height:
             # TODO: div by zero error if all data exists at a single point.
             pixels_per_degree = pixels_per_lat = (
                 float(height - padding) /
-                bounding_box_xy.SizeY() * SCALE_FACTOR)
+                extent_out.SizeY() * SCALE_FACTOR)
         if width:
             # TODO: div by zero error if all data exists at a single point.
             pixels_per_degree = (
                 float(width - padding) /
-                bounding_box_xy.SizeX() * SCALE_FACTOR)
+                extent_out.SizeX() * SCALE_FACTOR)
             if height:
                 pixels_per_degree = min(pixels_per_degree, pixels_per_lat)
         assert(pixels_per_degree > 0)
@@ -189,12 +189,6 @@ class MercatorProjection(Projection):
                * math.atan(math.exp(-y / self._pixels_per_radian)) - 90)
         lon = x / self.pixels_per_degree
         return (lat, lon)
-
-projections = {
-    'equirectangular': EquirectangularProjection,
-    'mercator': MercatorProjection,
-}
-
 
 class BoundingBox():
     '''This can be used for x,y or lat,lon; ints or floats.  It does not
@@ -536,13 +530,10 @@ class GaussianKernel:
         return math.e ** (-distance * self.scale)
 
 
-kernels = {
-    'linear': LinearKernel,
-    'gaussian': GaussianKernel,
-}
-
-
 class ColorMap:
+    DEFAULT_HSVA_MIN_STR = '000ffff00'
+    DEFAULT_HSVA_MAX_STR = '02affffff'
+
     @staticmethod
     def _str_to_float(string, base=16, maxval=256):
         return float(int(string, base)) / maxval
@@ -578,8 +569,17 @@ class ColorMap:
 
         '''
         self.values = []
-        if hsva_min:
-            assert hsva_max is not None
+        if image:
+            assert image.mode == 'RGBA', (
+                'Gradient image must be RGBA.  Yours is %s.' % image.mode)
+            num_rows = image.size[1]
+            self.values = [image.getpixel((0, row)) for row in range(num_rows)]
+            self.values.reverse()
+        else:
+            if not hsva_min:
+                hsva_min = ColorMap.str_to_hsva(self.DEFAULT_HSVA_MIN_STR)
+            if not hsva_max:
+                hsva_max = ColorMap.str_to_hsva(self.DEFAULT_HSVA_MAX_STR)
             # Turn (h1,s1,v1,a1), (h2,s2,v2,a2) into (h2-h1,s2-s1,v2-v1,a2-a1)
             hsva_range = list(map(lambda min, max: max - min, hsva_min, hsva_max))
             for value in range(0, steps):
@@ -590,31 +590,24 @@ class ColorMap:
                 rgba = tuple(
                     [int(x * 255) for x in hsv_to_rgb(*hsva[0:3]) + (hsva[3],)])
                 self.values.append(rgba)
-        else:
-            assert image is not None
-            assert image.mode == 'RGBA', (
-                'Gradient image must be RGBA.  Yours is %s.' % image.mode)
-            num_rows = image.size[1]
-            self.values = [image.getpixel((0, row)) for row in range(num_rows)]
-            self.values.reverse()
 
     def get(self, floatval):
         return self.values[int(floatval * (len(self.values) - 1))]
 
 
 class ImageMaker():
-    def __init__(self, colormap, background=None, background_image=None):
+    def __init__(self, config):
         '''Each argument to the constructor should be a 4-tuple of (hue,
         saturaton, value, alpha), one to use for minimum data values and
         one for maximum.  Each should be in [0,1], however because hue is
         circular, you may specify hue in any range and it will be shifted
         into [0,1] as needed.  This is so you can wrap around the color
         wheel in either direction.'''
-        self.colormap = colormap
-        self.background_image = background_image
-        self.background = None
-        if background and not background_image:
-            self.background = ImageColor.getrgb(background)
+        self.config = config
+        if config.background and not config.background_image:
+            self.background = ImageColor.getrgb(config.background)
+        else:
+            self.background = None
 
     @staticmethod
     def _blend_pixels(a, b):
@@ -625,17 +618,15 @@ class ImageMaker():
             map(lambda aa, bb: int(aa * alpha + bb * (1 - alpha)), a[:3], b))
 
 
-    def SavePNG(
-            self, matrix, filename, requested_width=None,
-            requested_height=None, bounding_box=None):
-        if not bounding_box:
-            bounding_box = matrix.BoundingBox()
-        bounding_box.ClipToSize(requested_width, requested_height)
-        ((minX, minY), (maxX, maxY)) = bounding_box.Corners()
+    def save(self, matrix, filename=None):
+        extent = self.config.extent_out
+        if not extent:
+            extent = matrix.BoundingBox()
+        extent.ClipToSize(self.config.width, self.config.height)
+        ((minX, minY), (maxX, maxY)) = extent.Corners()
         width = maxX - minX + 1
         height = maxY - minY + 1
         logging.info('saving image (%d x %d)' % (width, height))
-
         if self.background:
             img = Image.new('RGB', (width, height), self.background)
         else:
@@ -652,24 +643,25 @@ class ImageMaker():
         # the caller an opportunity to do something better for tiles that
         # contain no data.
         for ((x, y), val) in matrix.items():
-            if bounding_box.IsInside((x, y)):
+            if extent.IsInside((x, y)):
                 if self.background:
                     pixels[x - minX, y - minY] = ImageMaker._blend_pixels(
-                        self.colormap.get(val / maxval),
+                        self.config.colormap.get(val / maxval),
                         self.background)
                 else:
-                    pixels[x - minX, y - minY] = self.colormap.get(val / maxval)
-        if self.background_image:
+                    pixels[x - minX, y - minY] = self.config.colormap.get(val / maxval)
+        if self.config.background_image:
             # Is this really the best way?
-            img = Image.composite(img, self.background_image, img.split()[3])
-        img.save(filename)
+            img = Image.composite(img, self.config.background_image,
+                                  img.split()[3])
+        img.save(filename or self.config.output)
 
 
 class ImageSeriesMaker():
     '''Creates a movie showing the data appearing on the heatmap.'''
     def __init__(self, config):
         self.config = config
-        self.image_maker = ImageMaker(config.colormap, config.background, config.background_image)
+        self.image_maker = ImageMaker(config)
         self.tmpdir = tempfile.mkdtemp()
         self.imgfile_template = os.path.join(self.tmpdir, 'frame-%05d.png')
 
@@ -678,9 +670,7 @@ class ImageSeriesMaker():
         self.frame_count += 1
         logging.info('Frame %d' % (self.frame_count))
         matrix = matrix.Finalized()
-        self.image_maker.SavePNG(
-            matrix, self.imgfile_template % self.frame_count,
-            self.config.width, self.config.height, self.config.bounding_box_xy)
+        self.image_maker.save(matrix, self.imgfile_template % self.frame_count)
 
     def MaybeSaveImage(self, matrix):
         self.inputs_since_output += 1
@@ -740,25 +730,27 @@ def _ScaleForOSMZoom(zoom):
     return 256 * pow(2, zoom) / 360.0
 
 
-def ChooseOSMZoom(bbox_ll, padding):
+def ChooseOSMZoom(config, padding):
     # Since we know we're only going to do this with Mercator, we could do
     # a bit more math and solve this directly, but as a first pass method,
     # we instead project the bounding box into pixel-land at a high zoom
     # level, then see the power of two we're off by.
-    if options.zoom:
-        return options.zoom
+    if config.zoom:
+        return config.zoom
+    if not (config.width or config.height):
+        raise ValueError('For OSM, you must specify height, width, or zoom')
     crazy_zoom_level = 30
     proj = MercatorProjection()
     scale = _ScaleForOSMZoom(crazy_zoom_level)
     proj.pixels_per_degree = scale
-    bbox_crazy_xy = bbox_ll.Map(proj.Project)
-    if options.width:
+    bbox_crazy_xy = config.extent_in.Map(proj.Project)
+    if config.width:
         size_ratio = width_ratio = (
-            float(bbox_crazy_xy.SizeX()) / (options.width - 2 * padding))
-    if options.height:
+            float(bbox_crazy_xy.SizeX()) / (config.width - 2 * padding))
+    if config.height:
         size_ratio = (
-            float(bbox_crazy_xy.SizeY()) / (options.height - 2 * padding))
-        if options.width:
+            float(bbox_crazy_xy.SizeY()) / (config.height - 2 * padding))
+        if config.width:
             size_ratio = max(size_ratio, width_ratio)
     # TODO: We use --height and --width as upper bounds, choosing a zoom
     # level that lets our image be no larger than the specified size.
@@ -771,15 +763,15 @@ def ChooseOSMZoom(bbox_ll, padding):
     return zoom
 
 
-def GetOSMBackground(bbox_ll, padding, osm_base):
-    zoom = ChooseOSMZoom(bbox_ll, padding)
+def GetOSMBackground(config, padding):
+    zoom = ChooseOSMZoom(config, padding)
     proj = MercatorProjection()
     proj.pixels_per_degree = _ScaleForOSMZoom(zoom)
-    bbox_xy = bbox_ll.Map(proj.Project)
+    bbox_xy = config.extent_in.Map(proj.Project)
     # We're not checking that the padding fits within the specified size.
     bbox_xy.Grow(padding)
     bbox_ll = bbox_xy.Map(proj.InverseProject)
-    image, img_bbox_ll = _GetOSMImage(bbox_ll, zoom, osm_base)
+    image, img_bbox_ll = _GetOSMImage(bbox_ll, zoom, config.osm_base)
     img_bbox_xy = img_bbox_ll.Map(proj.Project)
 
     # TODO: this crops to our data extent, which means we're not making
@@ -794,6 +786,11 @@ def GetOSMBackground(bbox_ll, padding, osm_base):
         y_offset,
         x_offset + x_size,
         y_offset + y_size))
+
+    config.background_image = image
+    config.extent_in = bbox_ll
+    config.projection = proj
+    (config.width, config.height) = image.size
     return image, bbox_ll, proj
 
 
@@ -807,260 +804,6 @@ def ProcessShapes(config, hook=None):
         if hook:
             hook(matrix)
     return matrix
-
-
-def setup_cmdline_options():
-    '''Return a an OptionParser set up for our command line options.'''
-    # TODO: convert to argparse
-    from optparse import OptionParser
-    optparser = OptionParser(version=__version__)
-    optparser.add_option('-g', '--gpx', metavar='FILE')
-    optparser.add_option(
-        '-p', '--points', metavar='FILE',
-        help=(
-            'File containing one space-separated coordinate pair per line, '
-            'with optional point value as third term.'))
-    optparser.add_option(
-        '', '--csv', metavar='FILE',
-        help=(
-            'File containing one comma-separated coordinate pair per line, '
-            'the rest of the line is ignored.'))
-    optparser.add_option(
-        '', '--ignore_csv_header', action='store_true',
-        help='Ignore first line of CSV input file.')
-
-    optparser.add_option(
-        '-s', '--scale', metavar='FLOAT', type='float',
-        help='meters per pixel, approximate'),
-    optparser.add_option(
-        '-W', '--width', metavar='INT', type='int',
-        help='width of output image'),
-    optparser.add_option(
-        '-H', '--height', metavar='INT', type='int',
-        help='height of output image'),
-    optparser.add_option(
-        '-P', '--projection', metavar='NAME', type='choice',
-        choices=list(projections.keys()), default='mercator',
-        help='choices: ' + ', '.join(projections.keys()) +
-        '; default: %default')
-    optparser.add_option(
-        '-e', '--extent', metavar='RANGE',
-        help=(
-            'Clip results to RANGE, which is specified as lat1,lon1,lat2,lon2;'
-            ' (for square mercator: -85.0511,-180,85.0511,180)'))
-    optparser.add_option(
-        '-R', '--margin', metavar='INT', type='int', default=0,
-        help=(
-            'Try to keep data at least this many pixels away from image '
-            'border.'))
-    optparser.add_option(
-        '-r', '--radius', metavar='INT', type='int', default=15,
-        help='pixel radius of point blobs; default: %default')
-    optparser.add_option(
-        '-d', '--decay', metavar='FLOAT', type='float', default=0.95,
-        help=(
-            'float in [0,1]; Larger values give more weight to data '
-            'magnitude.  Smaller values are more democratic.  default:'
-            '%default'))
-    optparser.add_option(
-        '-S', '--save', metavar='FILE', help='save processed data to FILE')
-    optparser.add_option(
-        '-L', '--load', metavar='FILE', help='load processed data from FILE')
-    optparser.add_option(
-        '-o', '--output', metavar='FILE',
-        help='name of output file (image or video)')
-    optparser.add_option(
-        '-a', '--animate', action='store_true',
-        help='Make an animation instead of a static image')
-    optparser.add_option(
-        '', '--frequency', type='int', default=1,
-        help='input points per animation frame; default: %default')
-    optparser.add_option(
-        '', '--straggler_threshold', type='int', default=1,
-        help='add one more animation frame if >= this many inputs remain')
-    optparser.add_option(
-        '-F', '--ffmpegopts', metavar='STR',
-        help='extra options to pass to ffmpeg when making an animation')
-    optparser.add_option(
-        '-K', '--keepframes', action='store_true',
-        help='keep intermediate images after creating an animation')
-    optparser.add_option(
-        '-b', '--background', metavar='COLOR',
-        help='composite onto this background (color name or #rrggbb)')
-    optparser.add_option(
-        '-I', '--background_image', metavar='FILE',
-        help='composite onto this image')
-    optparser.add_option(
-        '-B', '--background_brightness', type='float', metavar='NUM',
-        help='Multiply each pixel in background image by this.')
-    optparser.add_option(
-        '-m', '--hsva_min', metavar='HEX', default='000ffff00',
-        help='hhhssvvaa hex for minimum data values; default: %default')
-    optparser.add_option(
-        '-M', '--hsva_max', metavar='HEX', default='02affffff',
-        help='hhhssvvaa hex for maximum data values; default: %default')
-    optparser.add_option(
-        '-G', '--gradient', metavar='FILE',
-        help=(
-        'Take color gradient from this the first column of pixels in '
-        'this image.  Overrides -m and -M.'))
-    optparser.add_option(
-        '-k', '--kernel',
-        type='choice',
-        default='linear',
-        choices=list(kernels.keys()),
-        help=('Kernel to use for the falling-off function; choices: ' +
-              ', '.join(kernels.keys()) + '; default: %default'))
-    optparser.add_option(
-        '', '--osm', action='store_true',
-        help='Composite onto OpenStreetMap tiles')
-    optparser.add_option(
-        '', '--osm_base', metavar='URL',
-        default='http://tile.openstreetmap.org',
-        help='Base URL for map tiles; default %default')
-    optparser.add_option(
-        '-z', '--zoom', type='int',
-        help='Zoom level for OSM; 0 (the default) means autozoom')
-    optparser.add_option('-v', '--verbose', action='store_true')
-    optparser.add_option('', '--debug', action='store_true')
-    return optparser
-
-
-class Configuration(object):
-    '''
-    There are lots of configuration parameters, used at various levels
-    of the module.  To simplify passing them down to where they are used
-    without cluttering up the code in between, we stash everything in
-    this object.
-
-    Most of the command line processing is done here in from_options().
-    The idea is that someone could import this module, populate a
-    Configuration instance manually, and run the process themselves.
-    Where possible, this object contains instances, rather than option
-    strings (e.g. for projection, kernel, colormap, etc).
-
-    Every parameter is explained in the glossary dictionary, and only
-    documented parameters are allowed.  Parameters default to None.
-    '''
-
-    glossary = {
-        'output' : 'output filename',
-        'width' : 'width of output image',
-        'height' : 'height of output image',
-        'shapes' : 'unprojected list of shapes (Points and LineSegments)',
-        'projection' : 'Projection instance',
-        'colormap' : 'ColorMap instance',
-        'decay' : 'see command line options',
-        'kernel' : 'kernel instance',
-        'bounding_box_xy' : 'optional extent in projected space',
-        # TODO: add optional bounding_box_ll for filtering input
-        'background': 'composite onto this background color',
-        'background_image': 'composite onto this image',
-
-        # These are for making an animation, ignored otherwise.
-        'ffmpegopts' : 'extra options to pass to ffmpeg (for animations)',
-        'keepframes' : 'whether to keep image frames after creating animation',
-        'frequency'  : 'number of input shapes per frame',
-        'straggler_threshold' : 'add last frame if >= this many inputs remain',
-
-        # If you need new slots with which to pass data to your own
-        # hacks, you'll need to add to this glossary.  You can do that
-        # at run time if that's more convenient.
-        }
-    __slots__ = glossary.keys()
-
-    def __init__(self):
-        for k in self.glossary.keys():
-            setattr(self, k, None)  # everything defaults to None
-
-    def from_options(self, options):
-        for k in ('width', 'height',
-                  'keepframes',
-                  'ffmpegopts',
-                  'frequency',
-                  'straggler_threshold',
-                  'output',
-                  'decay',
-                  'background',
-                  ):
-            setattr(self, k, getattr(options, k))
-
-        if options.gpx:
-            logging.debug('Reading from gpx: %s' + options.gpx)
-            self.shapes = shapes_from_gpx(options.gpx)
-        elif options.points:
-            logging.debug('Reading from points: %s' + options.points)
-            self.shapes = shapes_from_file(options.points)
-        elif options.csv:
-            logging.debug('Reading from csv: %s' + options.csv)
-            self.shapes = shapes_from_csv(options.csv, options.ignore_csv_header)
-        else:
-            raise ValueError('no input file')
-
-        if ((options.gpx or options.points or options.csv)
-            and not ((options.width or options.height or options.scale
-                      or options.background_image)
-                     or (options.osm and options.zoom))):
-            raise ValueError(
-                "With --gpx, --points or --csv, you must also specify at least "
-                "one of --width, --height,\n --scale, or --background_image, or "
-                "both --osm and --zoom.")
-
-        self.kernel = kernels[options.kernel](options.radius)
-
-        if options.gradient:
-            self.colormap = ColorMap(image = Image.open(options.gradient))
-        else:
-            self.colormap = ColorMap(hsva_min = ColorMap.str_to_hsva(options.hsva_min),
-                                     hsva_max = ColorMap.str_to_hsva(options.hsva_max))
-
-        bounding_box_ll = None
-        bounding_box_xy_padding = options.margin
-        if options.extent:
-            (lat1, lon1, lat2, lon2) = [float(f) for f in options.extent.split(',')]
-            bounding_box_ll = BoundingBox(corners=((lat1, lon1), (lat2, lon2)))
-        else:
-            self.shapes = list(self.shapes)
-            logging.debug('num shapes: %d' % len(self.shapes))
-            bounding_box_ll = BoundingBox(shapes=self.shapes)
-            bounding_box_xy_padding += options.radius
-
-        # background image
-        if options.background_image:
-            self.background_image = Image.open(options.background_image)
-            (self.width, self.height) = background_image.size
-
-        if options.osm:
-            (self.background_image,
-             bounding_box_ll,
-             self.projection) = GetOSMBackground(bounding_box_ll,
-                                                 bounding_box_xy_padding,
-                                                 options.osm_base)
-            (self.width, self.height) = background_image.size
-            bounding_box_xy_padding = 0  # already baked in
-
-        if options.background_brightness:
-            if self.background_image:
-                self.background_image = background_image.point(
-                    lambda x: x * options.background_brightness)
-            else:
-                logging.warning(
-                    'background brightness specified, but no background image')
-
-        if not self.projection:
-            self.projection = projections[options.projection]()
-            if options.scale:
-                self.projection.meters_per_pixel = options.scale
-            else:
-                self.projection.AutoSetScale(bounding_box_ll,
-                                             bounding_box_xy_padding,
-                                             self.width, self.height)
-        self.bounding_box_xy = bounding_box_ll.Map(self.projection.Project)
-        self.bounding_box_xy.Grow(bounding_box_xy_padding)
-        if not options.extent:
-            logging.info('Map extent: %s' % self.bounding_box_xy.Map(
-                self.projection.InverseProject).Extent())
-
 
 def shapes_from_gpx(filename):
     track = TrackLog(filename)
@@ -1100,10 +843,289 @@ def shapes_from_csv(filename, ignore_csv_header):
         logging.info('read %d points' % count)
 
 
+class Configuration(object):
+    '''
+    This object holds the settings for creating a heatmap as well as
+    an iterator for the input data.
+
+    Most of the command line processing is about settings and data, so
+    the command line options are also processed with this object.
+    This happens in two phases.
+
+    First the settings are parsed and turned into more useful objects
+    in set_from_options().  Command line flags go in, and the
+    Configuration object is populated with the specified values and
+    defaults.
+
+    In the second phase, various other parameters are computed.  These
+    are things we set automatically based on the other settings or on
+    the data.  You can skip this if you set everything manually, but 
+
+    The idea is that someone could import this module, populate a
+    Configuration instance manually, and run the process themselves.
+    Where possible, this object contains instances, rather than option
+    strings (e.g. for projection, kernel, colormap, etc).
+
+    Every parameter is explained in the glossary dictionary, and only
+    documented parameters are allowed.  Parameters default to None.
+    '''
+
+    glossary = {
+        # Many of these are exactly the same as the command line option.
+        # In those cases, the documentation is left blank.
+        # Many have default values based on the command line defaults.
+        'output' : '',
+        'width' : '',
+        'height' : '',
+        'margin' : '',
+        'shapes' : 'unprojected iterable of shapes (Points and LineSegments)',
+        'projection' : 'Projection instance',
+        'colormap' : 'ColorMap instance',
+        'decay' : '',
+        'kernel' : 'kernel instance',
+        'extent_in' : 'extent in original space',
+        'extent_out' : 'extent in projected space',
+
+        'background': '',
+        'background_image': '',
+        'background_brightness' : '',
+
+        # OpenStreetMap background tiles
+        'osm' : 'True/False; see command line options',
+        'osm_base' : '',
+        'zoom' : '',
+
+        # These are for making an animation, ignored otherwise.
+        'ffmpegopts' : '',
+        'keepframes' : '',
+        'frequency'  : '',
+        'straggler_threshold' : '',
+
+        # We always instantiate an OptionParser in order to set up
+        # default values.  You can use this OptionParser in your own
+        # script, perhaps adding your own options.
+        'optparser' : 'OptionParser instance for command line processing',
+    }
+
+    _kernels = { 'linear': LinearKernel,
+                 'gaussian': GaussianKernel, }
+    _projections = { 'equirectangular': EquirectangularProjection,
+                     'mercator': MercatorProjection, }
+
+    def __init__(self, use_defaults=True):
+        for k in self.glossary.keys():
+            setattr(self, k, None)
+        self.optparser = self._make_optparser()
+        if use_defaults:
+            self.set_defaults()
+
+    def set_defaults(self):
+        (options, args) = self.optparser.parse_args([])
+        self.set_from_options(options)
+    
+    def _make_optparser(self):
+        '''Return a an OptionParser set up for our command line options.'''
+        # TODO: convert to argparse
+        from optparse import OptionParser
+        optparser = OptionParser(version=__version__)
+        optparser.add_option('-g', '--gpx', metavar='FILE')
+        optparser.add_option(
+            '-p', '--points', metavar='FILE',
+            help=(
+                'File containing one space-separated coordinate pair per line, '
+                'with optional point value as third term.'))
+        optparser.add_option(
+            '', '--csv', metavar='FILE',
+            help=(
+                'File containing one comma-separated coordinate pair per line, '
+                'the rest of the line is ignored.'))
+        optparser.add_option(
+            '', '--ignore_csv_header', action='store_true',
+            help='Ignore first line of CSV input file.')
+
+        optparser.add_option(
+            '-s', '--scale', metavar='FLOAT', type='float',
+            help='meters per pixel, approximate'),
+        optparser.add_option(
+            '-W', '--width', metavar='INT', type='int',
+            help='width of output image'),
+        optparser.add_option(
+            '-H', '--height', metavar='INT', type='int',
+            help='height of output image'),
+        optparser.add_option(
+            '-P', '--projection', metavar='NAME', type='choice',
+            choices=list(self._projections.keys()), default='mercator',
+            help='choices: ' + ', '.join(self._projections.keys()) +
+            '; default: %default')
+        optparser.add_option(
+            '-e', '--extent', metavar='RANGE',
+            help=(
+                'Clip results to RANGE, which is specified as lat1,lon1,lat2,lon2;'
+                ' (for square mercator: -85.0511,-180,85.0511,180)'))
+        optparser.add_option(
+            '-R', '--margin', metavar='INT', type='int', default=0,
+            help=(
+                'Try to keep data at least this many pixels away from image '
+                'border.'))
+        optparser.add_option(
+            '-r', '--radius', metavar='INT', type='int', default=5,
+            help='pixel radius of point blobs; default: %default')
+        optparser.add_option(
+            '-d', '--decay', metavar='FLOAT', type='float', default=0.95,
+            help=(
+                'float in [0,1]; Larger values give more weight to data '
+                'magnitude.  Smaller values are more democratic.  default:'
+                '%default'))
+        optparser.add_option(
+            '-S', '--save', metavar='FILE', help='save processed data to FILE')
+        optparser.add_option(
+            '-L', '--load', metavar='FILE', help='load processed data from FILE')
+        optparser.add_option(
+            '-o', '--output', metavar='FILE',
+            help='name of output file (image or video)')
+        optparser.add_option(
+            '-a', '--animate', action='store_true',
+            help='Make an animation instead of a static image')
+        optparser.add_option(
+            '', '--frequency', type='int', default=1,
+            help='input points per animation frame; default: %default')
+        optparser.add_option(
+            '', '--straggler_threshold', type='int', default=1,
+            help='add one more animation frame if >= this many inputs remain')
+        optparser.add_option(
+            '-F', '--ffmpegopts', metavar='STR',
+            help='extra options to pass to ffmpeg when making an animation')
+        optparser.add_option(
+            '-K', '--keepframes', action='store_true',
+            help='keep intermediate images after creating an animation')
+        optparser.add_option(
+            '-b', '--background', metavar='COLOR',
+            help='composite onto this background (color name or #rrggbb)')
+        optparser.add_option(
+            '-I', '--background_image', metavar='FILE',
+            help='composite onto this image')
+        optparser.add_option(
+            '-B', '--background_brightness', type='float', metavar='NUM',
+            help='Multiply each pixel in background image by this.')
+        optparser.add_option(
+            '-m', '--hsva_min', metavar='HEX',
+            default=ColorMap.DEFAULT_HSVA_MIN_STR,
+            help='hhhssvvaa hex for minimum data values; default: %default')
+        optparser.add_option(
+            '-M', '--hsva_max', metavar='HEX',
+            default=ColorMap.DEFAULT_HSVA_MAX_STR,
+            help='hhhssvvaa hex for maximum data values; default: %default')
+        optparser.add_option(
+            '-G', '--gradient', metavar='FILE',
+            help=(
+            'Take color gradient from this the first column of pixels in '
+            'this image.  Overrides -m and -M.'))
+        optparser.add_option(
+            '-k', '--kernel',
+            type='choice',
+            default='linear',
+            choices=list(self._kernels.keys()),
+            help=('Kernel to use for the falling-off function; choices: ' +
+                  ', '.join(self._kernels.keys()) + '; default: %default'))
+        optparser.add_option(
+            '', '--osm', action='store_true',
+            help='Composite onto OpenStreetMap tiles')
+        optparser.add_option(
+            '', '--osm_base', metavar='URL',
+            default='http://tile.openstreetmap.org',
+            help='Base URL for map tiles; default %default')
+        optparser.add_option(
+            '-z', '--zoom', type='int',
+            help='Zoom level for OSM; 0 (the default) means autozoom')
+        optparser.add_option('-v', '--verbose', action='store_true')
+        optparser.add_option('', '--debug', action='store_true')
+        return optparser
+
+    def set_from_options(self, options):
+        for k in self.glossary.keys():
+            try:
+                setattr(self, k, getattr(options, k))
+            except AttributeError:
+                pass
+
+        self.kernel = self._kernels[options.kernel](options.radius)
+        self.projection = self._projections[options.projection]()
+
+        if options.scale:
+            self.projection.meters_per_pixel = options.scale
+
+        if options.gradient:
+            self.colormap = ColorMap(image = Image.open(options.gradient))
+        else:
+            self.colormap = ColorMap(hsva_min = ColorMap.str_to_hsva(options.hsva_min),
+                                     hsva_max = ColorMap.str_to_hsva(options.hsva_max))
+
+        if options.gpx:
+            logging.debug('Reading from gpx: %s' + options.gpx)
+            self.shapes = shapes_from_gpx(options.gpx)
+        elif options.points:
+            logging.debug('Reading from points: %s' + options.points)
+            self.shapes = shapes_from_file(options.points)
+        elif options.csv:
+            logging.debug('Reading from csv: %s' + options.csv)
+            self.shapes = shapes_from_csv(options.csv, options.ignore_csv_header)
+
+        if options.extent:
+            (lat1, lon1, lat2, lon2) = [float(f) for f in options.extent.split(',')]
+            self.extent_in = BoundingBox(corners=((lat1, lon1), (lat2, lon2)))
+
+        if options.background_image:
+            self.background_image = Image.open(options.background_image)
+            (self.width, self.height) = background_image.size
+
+
+    def fill_missing(self):
+        if not self.shapes:
+            raise ValueError('no input specified')
+
+        padding = self.margin + self.kernel.radius
+        if not self.extent_in:
+            logging.debug('reading input data')
+            self.shapes = list(self.shapes)
+            logging.debug('read %d shapes' % len(self.shapes))
+            self.extent_in = BoundingBox(shapes=self.shapes)
+
+        if self.osm:
+            GetOSMBackground(self, padding)
+        else:
+            try:
+                x = self.projection.pixels_per_degree
+            except AttributeError:   # scale wasn't set
+                self.projection.AutoSetScale(self.extent_in, padding,
+                                             self.width, self.height)
+                
+                if not (self.width
+                        or self.height
+                        or self.background_image):
+                    raise ValueError('You must specify width or height or scale '
+                                     'or background_image or both osm and zoom.')
+
+        if self.background_brightness is not None:
+            if self.background_image:
+                self.background_image = self.background_image.point(
+                    lambda x: x * self.background_brightness)
+                self.background_brightness = None   # idempotence
+            else:
+                logging.warning(
+                    'background brightness specified, but no background image')
+        
+        if not self.extent_out:
+            self.extent_out = self.extent_in.Map(self.projection.Project)
+            self.extent_out.Grow(padding)
+        logging.info('input extent: %s' % self.extent_out.Map(
+            self.projection.InverseProject).Extent())
+        logging.info('output extent: %s' % self.extent_out.Extent())
+
+
 def main():
     logging.basicConfig(format='%(relativeCreated)8d ms  // %(message)s')
-    optparser = setup_cmdline_options()
-    (options, args) = optparser.parse_args()
+    config = Configuration(use_defaults=False)
+    (options, args) = config.optparser.parse_args()
 
     if options.verbose:
         logging.getLogger().setLevel(logging.INFO)
@@ -1116,8 +1138,8 @@ def main():
         config = matrix['config']
         del matrix['config']
     else:
-        config = Configuration()
-        config.from_options(options)
+        config.set_from_options(options)
+        config.fill_missing()
         if options.animate:
             animator = ImageSeriesMaker(config)
             matrix = animator.MainLoop()
@@ -1126,9 +1148,7 @@ def main():
             matrix = matrix.Finalized()
 
     if options.output and not options.animate:
-        ImageMaker(config.colormap, config.background, config.background_image).SavePNG(
-            matrix, config.output, config.width, config.height,
-            config.bounding_box_xy)
+        ImageMaker(config).save(matrix)
 
     if options.save:
         logging.info('saving data')

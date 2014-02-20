@@ -31,17 +31,6 @@ indicate something.  This tool is not for that.
 A more thorough description and examples are posted at
  <http://sethoscope.net/heatmap/>
 
-## What next?
-
-Improvements I might one day get to, probably in this order:
-
- - refactor into a useful library (rather than a command line tool)
- - weight GPS line segments by inverse speed (so each point properly
-   represents how long was spent there, regardless of data sampling
-   rate)
- - pace animation according to data timestamps, rather than uniformly
- - provide some decent way to put results on a slippy map
-
 ## Tests
 
 [![Build Status](https://travis-ci.org/sethoscope/heatmap.png?branch=master)](https://travis-ci.org/sethoscope/heatmap)
