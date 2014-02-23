@@ -38,7 +38,6 @@ except ImportError:
     import pickle
 
 __version__ = '1.11'
-options = None
 
 class Coordinate(object):
     def __init__(self, x, y):
