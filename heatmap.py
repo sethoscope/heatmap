@@ -40,6 +40,49 @@ except ImportError:
 __version__ = '1.11'
 options = None
 
+class Coordinate(object):
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    first = property(lambda self: self.x)
+    second = property(lambda self: self.y)
+
+    def copy(self):
+        return self.__class__(self.x, self.y)
+
+    def __str__(self):
+        return '(%s, %s)' % (str(self.x), str(self.y))
+
+    def __hash__(self):
+        return hash((self.x, self.y))
+
+    def __eq__(self, o):
+        return True if self.x == o.x and self.y == o.y else False
+
+
+class LatLon(Coordinate):
+    def __init__(self, lat, lon):
+        self.lat = lat
+        self.lon = lon
+    
+    def get_lat(self):
+        return self.y
+
+    def set_lat(self, lat):
+        self.y = lat
+
+    def get_lon(self):
+        return self.x
+
+    def set_lon(self, lon):
+        self.x = lon
+
+    lat = property(get_lat, set_lat)
+    lon = property(get_lon, set_lon)
+
+    first = property(get_lat)
+    second = property(get_lon)
 
 class TrackLog:
     class Trkseg(list):  # for GPX <trkseg> tags
@@ -47,10 +90,10 @@ class TrackLog:
 
     class Trkpt:  # for GPX <trkpt> tags
         def __init__(self, lat, lon):
-            self.coords = (float(lat), float(lon))
+            self.coords = LatLon(float(lat), float(lon))
 
         def __str__(self):
-            return '%f,%f' % self.coords
+            return str(self.coords)
 
     def _Parse(self, filename):
         self._segments = []
@@ -108,6 +151,9 @@ class Projection(object):
     pixels_per_degree = property(get_pixels_per_degree, set_pixels_per_degree)
     meters_per_pixel = property(get_meters_per_pixel, set_meters_per_pixel)
 
+    def is_scaled(self):
+        return hasattr(self, '_pixels_per_degree')
+
     def Project(self, coords):
         raise NotImplementedError
 
@@ -127,8 +173,7 @@ class Projection(object):
         # something simpler that just solves for scale given the lat/lon
         # and x/y bounds.
 
-        # xy coordinates are ints, so we'll work large
-        # to minimize roundoff error.
+        # We'll work large to minimize roundoff error.
         SCALE_FACTOR = 1000000.0
         self.pixels_per_degree = SCALE_FACTOR
         extent_out = extent_in.Map(self.Project)
@@ -137,12 +182,12 @@ class Projection(object):
             # TODO: div by zero error if all data exists at a single point.
             pixels_per_degree = pixels_per_lat = (
                 float(height - padding) /
-                extent_out.SizeY() * SCALE_FACTOR)
+                extent_out.size().y * SCALE_FACTOR)
         if width:
             # TODO: div by zero error if all data exists at a single point.
             pixels_per_degree = (
                 float(width - padding) /
-                extent_out.SizeX() * SCALE_FACTOR)
+                extent_out.size().x * SCALE_FACTOR)
             if height:
                 pixels_per_degree = min(pixels_per_degree, pixels_per_lat)
         assert(pixels_per_degree > 0)
@@ -152,22 +197,16 @@ class Projection(object):
 # Treats Lat/Lon as a square grid.
 class EquirectangularProjection(Projection):
     # http://en.wikipedia.org/wiki/Equirectangular_projection
-    def Project(self, lat_lon):
-        (lat, lon) = lat_lon
-        x = int(lon * self.pixels_per_degree)
-        y = -int(lat * self.pixels_per_degree)
-        return (x, y)
+    def Project(self, coord):
+        x = coord.lon * self.pixels_per_degree
+        y = -coord.lat * self.pixels_per_degree
+        return Coordinate(x, y)
 
-    def InverseProject(self, x_y):
-        (x, y) = x_y
-        lat = -y / self.pixels_per_degree
-        lon = x / self.pixels_per_degree
-        return (lat, lon)
+    def InverseProject(self, coord):
+        lat = -coord.y / self.pixels_per_degree
+        lon = coord.x / self.pixels_per_degree
+        return LatLon(lat, lon)
 
-
-# If someone wants to use pixel coordinates instead of Lat/Lon, we
-# could add an XYProjection.  EquirectangularProjection would work,
-# but would be upside-down.
 
 class MercatorProjection(Projection):
     def set_pixels_per_degree(self, val):
@@ -176,125 +215,81 @@ class MercatorProjection(Projection):
     pixels_per_degree = property(Projection.get_pixels_per_degree,
                                  set_pixels_per_degree)
 
-    def Project(self, lat_lon):
-        (lat, lon) = lat_lon
-        x = int(lon * self.pixels_per_degree)
-        y = -int(self._pixels_per_radian * math.log(
-            math.tan((math.pi/4 + math.pi/360 * lat))))
-        return (x, y)
+    def Project(self, coord):
+        x = coord.lon * self.pixels_per_degree
+        y = -self._pixels_per_radian * math.log(
+            math.tan((math.pi/4 + math.pi/360 * coord.lat)))
+        return Coordinate(x, y)
 
-    def InverseProject(self, x_y):
-        (x, y) = x_y
+    def InverseProject(self, coord):
         lat = (360 / math.pi
-               * math.atan(math.exp(-y / self._pixels_per_radian)) - 90)
-        lon = x / self.pixels_per_degree
-        return (lat, lon)
+               * math.atan(math.exp(-coord.y / self._pixels_per_radian)) - 90)
+        lon = coord.x / self.pixels_per_degree
+        return LatLon(lat, lon)
 
 class BoundingBox():
-    '''This can be used for x,y or lat,lon; ints or floats.  It does not
-    care which dimension is which, except that SizeX() and SizeY() refer
-    to the first and second coordinate, regardless of which one is width
-    and which is height.  (For Lat/Lon, SizeX() returns North/South
-    extent.  This is confusing, but the alternative is to make assumptions
-    based on whether the type (int or float) of the coordinates, which has
-    too much hidden magic, or to let the caller set it in the constructor.
-    Instead we just require you to know what you are doing.  There is a
-    similar opportunity for magic with the desire to count fenceposts
-    rather than distance, and here too we ignore the issue and let the
-    caller deal with it as needed.'''
-    def __init__(self, corners=None, shapes=None, coords=None):
-        if corners:
-            self.FromCorners(corners)
+    def __init__(self, coords=None, shapes=None):
+        if coords:
+            coords = tuple(coords) # if it's a generator, slurp them all
+            self.min = coords[0].__class__(min(c.first for c in coords),
+                                           min(c.second for c in coords))
+            self.max = coords[0].__class__(max(c.first for c in coords),
+                                           max(c.second for c in coords))
         elif shapes:
-            self.FromShapes(shapes)
-        elif coords:
-            self.FromCoords(coords)
+            self.from_shapes(shapes)
         else:
             raise ValueError('BoundingBox must be initialized')
 
     def __str__(self):
-        return '%s,%s,%s,%s  (%sx%s)' % (
-            self.minX, self.minY, self.maxX, self.maxY, self.SizeX(),
-            self.SizeY())
+        return '%s,%s,%s,%s' % (self.min.y, self.min.x, self.max.y, self.max.x)
 
-    def Extent(self):
-        return '%s,%s,%s,%s' % (self.minX, self.minY, self.maxX, self.maxY)
+    def update(self, other):
+        '''grow this bounding box so that it includes the other'''
+        self.min.x = min(self.min.x, other.min.x)
+        self.min.y = min(self.min.y, other.min.y)
+        self.max.x = max(self.max.x, other.max.x)
+        self.max.y = max(self.max.y, other.max.y)
 
-    def FromCorners(self, x1_y1_x2_y2):
-        ((x1, y1), (x2, y2)) = x1_y1_x2_y2
-        self.minX = min(x1, x2)
-        self.minY = min(y1, y2)
-        self.maxX = max(x1, x2)
-        self.maxY = max(y1, y2)
+    def from_bounding_box(self, other):
+        self.min = other.min.copy()
+        self.max = other.max.copy()
 
-    def FromShapes(self, shapes):
-        if not shapes:
-            return self.FromCorners(((0, 0), (0, 0)))
-        # We loop through four times, but the code is nice and clean.
-        self.minX = min(s.MinX() for s in shapes)
-        self.maxX = max(s.MaxX() for s in shapes)
-        self.minY = min(s.MinY() for s in shapes)
-        self.maxY = max(s.MaxY() for s in shapes)
-
-    def FromCoords(self, coords):
-        if not coords:
-            return self.FromCorners(((0, 0), (0, 0)))
-        # We loop through four times, but the code is nice and clean.
-        self.minX = min(c[0] for c in coords)
-        self.maxX = max(c[0] for c in coords)
-        self.minY = min(c[1] for c in coords)
-        self.maxY = max(c[1] for c in coords)
+    def from_shapes(self, shapes):
+        shapes = iter(shapes)
+        self.from_bounding_box(shapes.next().extent)
+        for s in shapes:
+            self.update(s.extent)
 
     def Corners(self):
-        return ((self.minX, self.minY), (self.maxX, self.maxY))
+        return (self.min, self.max)
 
-    # We use "SixeX" and "SizeY" instead of Width and Height because we
-    # use these both for XY and LatLon, and they're in opposite order.
-    # Rather than have the object try to keep track, we just choose not
-    # to need it.  In a strongly typed language, we could distinguish
-    # between degrees and pixels.  We could do that here by overloading
-    # floats and ints, but that would just be a different kind of
-    # confusion and probably easier to make mistakes with.
-    def SizeX(self):
-        return self.maxX - self.minX
-
-    def SizeY(self):
-        return self.maxY - self.minY
+    def size(self):
+        return self.max.__class__(self.max.x - self.min.x,
+                                  self.max.y - self.min.y)
 
     def Grow(self, pad):
-        self.minX -= pad
-        self.minY -= pad
-        self.maxX += pad
-        self.maxY += pad
+        self.min.x -= pad
+        self.min.y -= pad
+        self.max.x += pad
+        self.max.y += pad
 
-    def ClipToSize(self, width=None, height=None, include_fenceposts=True):
-        fencepost = include_fenceposts and 1 or 0
+    def resize(self, width=None, height=None):
         if width:
-            current_width = self.SizeX()
-            # round up
-            self.maxX += int(float(1 + width - current_width - fencepost) / 2)
-            self.minX = self.maxX - width + fencepost
-
+            self.max.x += float(width - self.size().x) / 2
+            self.min.x = self.max.x - width
         if height:
-            current_height = self.SizeY()
-            # round up
-            self.maxY += int(
-                float(1 + height - current_height - fencepost) / 2)
-            self.minY = self.maxY - height + fencepost
+            self.max.y += float(height - self.size().y) / 2
+            self.min.y = self.max.y - height
 
-    def IsInside(self, x_y):
-        (x, y) = x_y
-        return (
-            x >= self.minX and x <= self.maxX
-            and y >= self.minY and y <= self.maxY)
+    def is_inside(self, coord):
+        return (coord.x >= self.min.x and coord.x <= self.max.x and
+                coord.y >= self.min.y and coord.y <= self.max.y)
 
     def Map(self, func):
         '''Returns a new BoundingBox whose corners are a function of the
         corners of this one.  The expected use is to project a BoundingBox
         onto a map.  For example: bbox_xy = bbox_ll.Map(projector.Project)'''
-        return BoundingBox(
-            corners=(func((self.minX, self.minY)),
-                     func((self.maxX, self.maxY))))
+        return BoundingBox(coords=(func(self.min), func(self.max)))
 
 
 class Matrix(defaultdict):
@@ -379,35 +374,27 @@ class DiminishingReducer():
 
 
 class Point:
-    def __init__(self, x_y, weight=1.0):
-        (x, y) = x_y
-        self.x = x
-        self.y = y
+    def __init__(self, coord, weight=1.0):
+        self.coord = coord
         self.weight = weight
 
     def __str__(self):
-        return 'P(%s,%s)' % (self.x, self.y)
+        return 'P(%s)' % str(self.coord)
 
     @staticmethod
     def GeneralDistance(x, y):
         # assumes square units, which causes distortion in some projections
         return (x ** 2 + y ** 2) ** 0.5
 
-    def Distance(self, x_y):
-        (x, y) = x_y
-        return self.GeneralDistance(self.x - x, self.y - y)
+    # def Distance(self, coord):
+    #     return self.GeneralDistance(self.coord.x - coord.x,
+    #                                 self.coord.y - coord.y)
 
-    def MinX(self):
-        return self.x
-
-    def MaxX(self):
-        return self.x
-
-    def MinY(self):
-        return self.y
-
-    def MaxY(self):
-        return self.y
+    @property
+    def extent(self):
+        if not hasattr(self, '_extent'):
+            self._extent = BoundingBox(coords=(self.coord,))
+        return self._extent
 
     # From a modularity standpoint, it would be reasonable to cache
     # distances, not heat values, and let the kernel cache the
@@ -425,60 +412,46 @@ class Point:
         if kernel not in Point.heat_cache:
             Point.InitializeHeatCache(kernel)
         cache = Point.heat_cache[kernel]
+        x = int(self.coord.x)
+        y = int(self.coord.y)
         for dx in range(-kernel.radius, kernel.radius + 1):
             for dy in range(-kernel.radius, kernel.radius + 1):
-                matrix.Add((self.x + dx, self.y + dy),
+                matrix.Add(Coordinate(x + dx, y + dy),
                            self.weight * cache[(abs(dx), abs(dy))])
 
     def Map(self, func):
-        return Point(func((self.x, self.y)), self.weight)
+        return Point(func(self.coord), self.weight)
 
 
 class LineSegment:
-    def __init__(self, x1_y1, x2_y2, weight=1.0):
-        (x1, y1) = x1_y1
-        (x2, y2) = x2_y2
-        self.x1 = x1
-        self.x2 = x2
-        self.y1 = y1
-        self.y2 = y2
+    def __init__(self, start, end, weight=1.0):
+        self.start = start
+        self.end = end
         self.weight = weight
-        self.length_squared = float(
-            (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1))
+        self.length_squared = float((self.end.x - self.start.x) ** 2 +
+                                    (self.end.y - self.start.y) ** 2)
+        self.extent = BoundingBox(coords=(start, end))
 
     def __str__(self):
-        return 'LineSegment((%s,%s), (%s,%s))' % (
-            self.x1, self.y1, self.x2, self.y2)
+        return 'LineSegment(%s, %s)' % (self.start, self.end)
 
-    def MinX(self):
-        return min(self.x1, self.x2)
-
-    def MaxX(self):
-        return max(self.x1, self.x2)
-
-    def MinY(self):
-        return min(self.y1, self.y2)
-
-    def MaxY(self):
-        return max(self.y1, self.y2)
-
-    def Distance(self, x_y):
+    def distance(self, coord):
         # http://stackoverflow.com/questions/849211/shortest-distance-between-a-point-and-a-line-segment
         # http://www.topcoder.com/tc?d1=tutorials&d2=geometry1&module=Static#line_point_distance
         # http://local.wasp.uwa.edu.au/~pbourke/geometry/pointline/
-        (x, y) = x_y
         try:
-            dx = (self.x2 - self.x1)
-            dy = (self.y2 - self.y1)
-            u = ((x - self.x1) * dx + (y - self.y1) * dy) / self.length_squared
+            dx = (self.end.x - self.start.x)
+            dy = (self.end.y - self.start.y)
+            u = ((coord.x - self.start.x) * dx +
+                 (coord.y - self.start.y) * dy) / self.length_squared
             if u < 0:
                 u = 0
             elif u > 1:
                 u = 1
         except ZeroDivisionError:
             u = 0  # Our line is zero-length.  That's ok.
-        dx = self.x1 + u * dx - x
-        dy = self.y1 + u * dy - y
+        dx = self.start.x + u * dx - coord.x
+        dy = self.start.y + u * dy - coord.y
         return math.sqrt(dx * dx + dy * dy)
 
     def AddHeatToMatrix(self, matrix, kernel):
@@ -486,23 +459,17 @@ class LineSegment:
         # extra margin given by the kernel's self-reported maximum range.
         # TODO: There is probably a more clever iteration that skips more
         # of the empty space.
-        for x in range(self.MinX() - kernel.radius,
-                       self.MaxX() + kernel.radius + 1):
-            for y in range(self.MinY() - kernel.radius,
-                           self.MaxY() + kernel.radius + 1):
-                heat = kernel.Heat(self.Distance((x, y)))
+        for x in range(int(self.extent.min.x - kernel.radius),
+                       int(self.extent.max.x + kernel.radius + 1)):
+            for y in range(int(self.extent.min.y - kernel.radius),
+                           int(self.extent.max.y + kernel.radius + 1)):
+                coord = Coordinate(x, y)
+                heat = kernel.Heat(self.distance(coord))
                 if heat:
-                    matrix.Add((x, y), self.weight * heat)
+                    matrix.Add(coord, self.weight * heat)
 
     def Map(self, func):
-        xy1 = func((self.x1, self.y1))
-        xy2 = func((self.x2, self.y2))
-        # Quantizing can make both endpoints the same, turning the
-        # LineSegment into an inefficient Point.  Better to replace it.
-        if xy1 == xy2:
-            return Point(xy1, self.weight)
-        else:
-            return LineSegment(xy1, xy2, self.weight)
+        return LineSegment(func(self.start), func(self.end))
 
 
 class LinearKernel:
@@ -566,8 +533,8 @@ class ColorMap:
         The optional steps argument specifies how many discrete steps
         there should be in the color gradient when using hsva_min
         and hsva_max.
-
         '''
+        # TODO: do the interpolation in Lab space instead of HSV
         self.values = []
         if image:
             assert image.mode == 'RGBA', (
@@ -622,36 +589,30 @@ class ImageMaker():
         extent = self.config.extent_out
         if not extent:
             extent = matrix.BoundingBox()
-        extent.ClipToSize(self.config.width, self.config.height)
-        ((minX, minY), (maxX, maxY)) = extent.Corners()
-        width = maxX - minX + 1
-        height = maxY - minY + 1
-        logging.info('saving image (%d x %d)' % (width, height))
+        extent.resize((self.config.width or 1) - 1,
+                      (self.config.height or 1) - 1)
+        size = extent.size()
+        size.x = int(size.x) + 1
+        size.y = int(size.y) + 1
+        logging.info('saving image (%d x %d)' % (size.x, size.y))
         if self.background:
-            img = Image.new('RGB', (width, height), self.background)
+            img = Image.new('RGB', (size.x, size.y), self.background)
         else:
-            img = Image.new('RGBA', (width, height))
+            img = Image.new('RGBA', (size.x, size.y))
 
         maxval = max(matrix.values())
         pixels = img.load()
-
-        # Iterating just over the non-zero data points is ideal when
-        # plotting the whole image, but for generating tile sets, it might
-        # make more sense for the caller to partition the points and pass in
-        # a list of points to use for each image.  That way we only iterate
-        # over the points once, rather than once per image.  That also gives
-        # the caller an opportunity to do something better for tiles that
-        # contain no data.
-        for ((x, y), val) in matrix.items():
-            if extent.IsInside((x, y)):
+        for (coord, val) in matrix.items():
+            x = int(coord.x - extent.min.x)
+            y = int(coord.y - extent.min.y)
+            if extent.is_inside(coord):
+                color = self.config.colormap.get(val / maxval)
                 if self.background:
-                    pixels[x - minX, y - minY] = ImageMaker._blend_pixels(
-                        self.config.colormap.get(val / maxval),
-                        self.background)
+                    pixels[x, y] = ImageMaker._blend_pixels(color,
+                                                            self.background)
                 else:
-                    pixels[x - minX, y - minY] = self.config.colormap.get(val / maxval)
+                    pixels[x, y] = color
         if self.config.background_image:
-            # Is this really the best way?
             img = Image.composite(img, self.config.background_image,
                                   img.split()[3])
         img.save(filename or self.config.output)
@@ -714,10 +675,11 @@ def _GetOSMImage(bbox, zoom, osm_base):
         osm = OSMManager(
             image_manager=PILImageManager('RGB'),
             server=osm_base)
-        ((lat1, lon1), (lat2, lon2)) = bbox.Corners()
-        image, bounds = osm.createOSMImage((lat1, lat2, lon1, lon2), zoom)
+        (c1, c2) = bbox.Corners()
+        image, bounds = osm.createOSMImage((c1.lat, c2.lat, c1.lon, c2.lon), zoom)
         (lat1, lat2, lon1, lon2) = bounds
-        return image, BoundingBox(corners=((lat1, lon1), (lat2, lon2)))
+        return image, BoundingBox(coords=(LatLon(lat1, lon1),
+                                          LatLon(lat2, lon2)))
     except ImportError as e:
         logging.error(
             "ImportError: %s.\n"
@@ -746,10 +708,10 @@ def ChooseOSMZoom(config, padding):
     bbox_crazy_xy = config.extent_in.Map(proj.Project)
     if config.width:
         size_ratio = width_ratio = (
-            float(bbox_crazy_xy.SizeX()) / (config.width - 2 * padding))
+            float(bbox_crazy_xy.size().x) / (config.width - 2 * padding))
     if config.height:
         size_ratio = (
-            float(bbox_crazy_xy.SizeY()) / (config.height - 2 * padding))
+            float(bbox_crazy_xy.size().y) / (config.height - 2 * padding))
         if config.width:
             size_ratio = max(size_ratio, width_ratio)
     # TODO: We use --height and --width as upper bounds, choosing a zoom
@@ -779,20 +741,16 @@ def GetOSMBackground(config, padding):
     # user specify whether to treat the requested size as min,max,exact.
     (x_offset, y_offset) = map(
         lambda a, b: a - b, bbox_xy.Corners()[0], img_bbox_xy.Corners()[0])
-    x_size = bbox_xy.SizeX() + 1
-    y_size = bbox_xy.SizeY() + 1
     image = image.crop((
         x_offset,
         y_offset,
-        x_offset + x_size,
-        y_offset + y_size))
-
+        x_offset + bbox_xy.size().x + 1,
+        y_offset + bbox_xy.size().y + 1))
     config.background_image = image
     config.extent_in = bbox_ll
     config.projection = proj
     (config.width, config.height) = image.size
     return image, bbox_ll, proj
-
 
 def ProcessShapes(config, hook=None):
     matrix = Matrix.MatrixFactory(config.decay)
@@ -825,7 +783,7 @@ def shapes_from_file(filename):
                 (lat, lon) = values[0:2]
                 weight = 1.0 if len(values) == 2 else values[2]
                 count += 1
-                yield Point((lat, lon), weight)
+                yield Point(LatLon(lat, lon), weight)
         logging.info('read %d points' % count)
 
 def shapes_from_csv(filename, ignore_csv_header):
@@ -839,7 +797,7 @@ def shapes_from_csv(filename, ignore_csv_header):
         for row in reader:
             (lat, lon) = (float(row[0]), float(row[1]))
             count += 1
-            yield Point((lat, lon))
+            yield Point(LatLon(lat, lon))
         logging.info('read %d points' % count)
 
 
@@ -1072,8 +1030,8 @@ class Configuration(object):
 
         if options.extent:
             (lat1, lon1, lat2, lon2) = [float(f) for f in options.extent.split(',')]
-            self.extent_in = BoundingBox(corners=((lat1, lon1), (lat2, lon2)))
-
+            self.extent_in = BoundingBox(coords=(LatLon(lat1, lon1),
+                                                 LatLon(lat2, lon2)))
         if options.background_image:
             self.background_image = Image.open(options.background_image)
             (self.width, self.height) = background_image.size
@@ -1093,15 +1051,10 @@ class Configuration(object):
         if self.osm:
             GetOSMBackground(self, padding)
         else:
-            try:
-                x = self.projection.pixels_per_degree
-            except AttributeError:   # scale wasn't set
+            if not self.projection.is_scaled():
                 self.projection.AutoSetScale(self.extent_in, padding,
                                              self.width, self.height)
-                
-                if not (self.width
-                        or self.height
-                        or self.background_image):
+                if not (self.width or self.height or self.background_image):
                     raise ValueError('You must specify width or height or scale '
                                      'or background_image or both osm and zoom.')
 
@@ -1117,9 +1070,9 @@ class Configuration(object):
         if not self.extent_out:
             self.extent_out = self.extent_in.Map(self.projection.Project)
             self.extent_out.Grow(padding)
-        logging.info('input extent: %s' % self.extent_out.Map(
-            self.projection.InverseProject).Extent())
-        logging.info('output extent: %s' % self.extent_out.Extent())
+        logging.info('input extent: %s' % str(self.extent_out.Map(
+            self.projection.InverseProject)))
+        logging.info('output extent: %s' % str(self.extent_out))
 
 
 def main():

@@ -31,7 +31,7 @@ def shapes_generator(count):
     for i in range(count):
         a = random.gauss(10, 1.0)
         b = random.gauss(10, 2.0)
-        yield hm.Point((a, b),)
+        yield hm.Point(hm.LatLon(a, b),)
 
 def setup_config(count, outfile):
     config = hm.Configuration()
