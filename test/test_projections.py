@@ -14,12 +14,12 @@ class Tests(unittest.TestCase):
         latlon_given = hm.LatLon(*latlon_given)
         xy_given = hm.Coordinate(*xy_given)
 
-        xy_actual = projection.Project(latlon_given)
+        xy_actual = projection.project(latlon_given)
         self.assertTrue(isinstance(xy_actual, hm.Coordinate))
         self.assertAlmostEqual(xy_given.x, xy_actual.x)
         self.assertAlmostEqual(xy_given.y, xy_actual.y)
 
-        latlon_actual = projection.InverseProject(xy_given)
+        latlon_actual = projection.inverse_project(xy_given)
         self.assertTrue(isinstance(latlon_actual, hm.LatLon))
         self.assertAlmostEqual(latlon_given.lat, latlon_actual.lat)
         self.assertAlmostEqual(latlon_given.lon, latlon_actual.lon)

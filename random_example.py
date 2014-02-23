@@ -63,8 +63,8 @@ def main():
     logging.debug('python version %s' % str(sys.version))
 
     config = setup_config(args.count, args.output)
-    matrix = hm.ProcessShapes(config)
-    matrix = matrix.Finalized()
+    matrix = hm.process_shapes(config)
+    matrix = matrix.finalized()
     hm.ImageMaker(config).save(matrix)
 
 if __name__ == '__main__':

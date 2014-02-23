@@ -54,9 +54,6 @@ class Coordinate(object):
     def __str__(self):
         return '(%s, %s)' % (str(self.x), str(self.y))
 
-    def __hash__(self):
-        return hash((self.x, self.y))
-
     def __eq__(self, o):
         return True if self.x == o.x and self.y == o.y else False
 
@@ -95,7 +92,7 @@ class TrackLog:
         def __str__(self):
             return str(self.coords)
 
-    def _Parse(self, filename):
+    def _parse(self, filename):
         self._segments = []
         for event, elem in ET.iterparse(filename, ('start', 'end')):
             elem.tag = elem.tag[elem.tag.rfind('}') + 1:]   # remove namespace
@@ -121,7 +118,7 @@ class TrackLog:
     def segments(self):
         '''Parse file and yield segments containing points'''
         logging.info('reading GPX track from %s' % self.filename)
-        return self._Parse(self.filename)
+        return self._parse(self.filename)
 
 
 class Projection(object):
@@ -154,13 +151,13 @@ class Projection(object):
     def is_scaled(self):
         return hasattr(self, '_pixels_per_degree')
 
-    def Project(self, coords):
+    def project(self, coords):
         raise NotImplementedError
 
-    def InverseProject(self, coords):   # Not all projections can support this.
+    def inverse_project(self, coords):   # Not all projections can support this.
         raise NotImplementedError
 
-    def AutoSetScale(self, extent_in, padding, width=None, height=None):
+    def auto_set_scale(self, extent_in, padding, width=None, height=None):
         # We need to choose a scale at which the data's bounding box,
         # once projected onto the map, will fit in the specified height
         # and/or width.  The catch is that we can't project until we
@@ -176,7 +173,7 @@ class Projection(object):
         # We'll work large to minimize roundoff error.
         SCALE_FACTOR = 1000000.0
         self.pixels_per_degree = SCALE_FACTOR
-        extent_out = extent_in.Map(self.Project)
+        extent_out = extent_in.map(self.project)
         padding *= 2  # padding-per-edge -> padding-in-each-dimension
         if height:
             # TODO: div by zero error if all data exists at a single point.
@@ -197,12 +194,12 @@ class Projection(object):
 # Treats Lat/Lon as a square grid.
 class EquirectangularProjection(Projection):
     # http://en.wikipedia.org/wiki/Equirectangular_projection
-    def Project(self, coord):
+    def project(self, coord):
         x = coord.lon * self.pixels_per_degree
         y = -coord.lat * self.pixels_per_degree
         return Coordinate(x, y)
 
-    def InverseProject(self, coord):
+    def inverse_project(self, coord):
         lat = -coord.y / self.pixels_per_degree
         lon = coord.x / self.pixels_per_degree
         return LatLon(lat, lon)
@@ -215,19 +212,19 @@ class MercatorProjection(Projection):
     pixels_per_degree = property(Projection.get_pixels_per_degree,
                                  set_pixels_per_degree)
 
-    def Project(self, coord):
+    def project(self, coord):
         x = coord.lon * self.pixels_per_degree
         y = -self._pixels_per_radian * math.log(
             math.tan((math.pi/4 + math.pi/360 * coord.lat)))
         return Coordinate(x, y)
 
-    def InverseProject(self, coord):
+    def inverse_project(self, coord):
         lat = (360 / math.pi
                * math.atan(math.exp(-coord.y / self._pixels_per_radian)) - 90)
         lon = coord.x / self.pixels_per_degree
         return LatLon(lat, lon)
 
-class BoundingBox():
+class Extent():
     def __init__(self, coords=None, shapes=None):
         if coords:
             coords = tuple(coords) # if it's a generator, slurp them all
@@ -238,7 +235,7 @@ class BoundingBox():
         elif shapes:
             self.from_shapes(shapes)
         else:
-            raise ValueError('BoundingBox must be initialized')
+            raise ValueError('Extent must be initialized')
 
     def __str__(self):
         return '%s,%s,%s,%s' % (self.min.y, self.min.x, self.max.y, self.max.x)
@@ -260,14 +257,14 @@ class BoundingBox():
         for s in shapes:
             self.update(s.extent)
 
-    def Corners(self):
+    def corners(self):
         return (self.min, self.max)
 
     def size(self):
         return self.max.__class__(self.max.x - self.min.x,
                                   self.max.y - self.min.y)
 
-    def Grow(self, pad):
+    def grow(self, pad):
         self.min.x -= pad
         self.min.y -= pad
         self.max.x += pad
@@ -285,18 +282,18 @@ class BoundingBox():
         return (coord.x >= self.min.x and coord.x <= self.max.x and
                 coord.y >= self.min.y and coord.y <= self.max.y)
 
-    def Map(self, func):
-        '''Returns a new BoundingBox whose corners are a function of the
-        corners of this one.  The expected use is to project a BoundingBox
-        onto a map.  For example: bbox_xy = bbox_ll.Map(projector.Project)'''
-        return BoundingBox(coords=(func(self.min), func(self.max)))
+    def map(self, func):
+        '''Returns a new Extent whose corners are a function of the
+        corners of this one.  The expected use is to project a Extent
+        onto a map.  For example: bbox_xy = bbox_ll.map(projector.project)'''
+        return Extent(coords=(func(self.min), func(self.max)))
 
 
 class Matrix(defaultdict):
     '''An abstract sparse matrix, with data stored as {coord : value}.'''
 
     @staticmethod
-    def MatrixFactory(decay):
+    def matrix_factory(decay):
         # If decay is 0 or 1, we can accumulate as we go and save lots of
         # memory.
         if decay == 1.0:
@@ -311,23 +308,23 @@ class Matrix(defaultdict):
     def __init__(self, default_factory=float):
         self.default_factory = default_factory
 
-    def Add(self, coord, val):
+    def add(self, coord, val):
         raise NotImplementedError
 
-    def BoundingBox(self):
-        return(BoundingBox(coords=self.keys()))
+    def extent(self):
+        return(Extent(coords=self.keys()))
 
-    def Finalized(self):
+    def finalized(self):
         return self
 
 
 class SummingMatrix(Matrix):
-    def Add(self, coord, val):
+    def add(self, coord, val):
         self[coord] += val
 
 
 class MaxingMatrix(Matrix):
-    def Add(self, coord, val):
+    def add(self, coord, val):
         self[coord] = max(val, self.get(coord, val))
 
 
@@ -336,32 +333,29 @@ class AppendingMatrix(Matrix):
         self.default_factory = list
         self.decay = decay
 
-    def Add(self, coord, val):
+    def add(self, coord, val):
         self[coord].append(val)
 
-    def Finalized(self):
+    def finalized(self):
         logging.info('combining coincident points')
-        dr = DiminishingReducer(self.decay)
         m = Matrix()
         for (coord, values) in self.items():
-            m[coord] = dr.Reduce(values)
+            m[coord] = self.reduce(self.decay, values)
         return m
 
-
-class DiminishingReducer():
-    def __init__(self, decay):
-        '''This reducer returns a weighted sum of the values, where weight
-        N is pow(decay,N).  This means the largest value counts fully, but
-        additional values have diminishing contributions.  decay=0.0 makes
+    @staticmethod
+    def reduce(decay, values):
+        '''
+        Returns a weighted sum of the values, where weight N is
+        pow(decay,N).  This means the largest value counts fully, but
+        additional values have diminishing contributions. decay=0 makes
         the reduction equivalent to max(), which makes each data point
         visible, but says nothing about their relative magnitude.
-        decay=1.0 makes this like sum(), which makes the relative magnitude
-        of the points more visible, but could make smaller values hard to see.
-        Experiment with values between 0 and 1.  Values outside that range
-        will give weird results.'''
-        self.decay = decay
-
-    def Reduce(self, values):
+        decay=1 makes this like sum(), which makes the relative
+        magnitude of the points more visible, but could make smaller
+        values hard to see.  Experiment with values between 0 and 1.
+        Values outside that range will give weird results.
+        '''
         # It would be nice to do this on the fly, while accumulating data, but
         # it needs to be insensitive to data order.
         weight = 1.0
@@ -369,7 +363,7 @@ class DiminishingReducer():
         values.sort(reverse=True)
         for value in values:
             total += value * weight
-            weight *= self.decay
+            weight *= decay
         return total
 
 
@@ -382,18 +376,14 @@ class Point:
         return 'P(%s)' % str(self.coord)
 
     @staticmethod
-    def GeneralDistance(x, y):
+    def general_distance(x, y):
         # assumes square units, which causes distortion in some projections
         return (x ** 2 + y ** 2) ** 0.5
-
-    # def Distance(self, coord):
-    #     return self.GeneralDistance(self.coord.x - coord.x,
-    #                                 self.coord.y - coord.y)
 
     @property
     def extent(self):
         if not hasattr(self, '_extent'):
-            self._extent = BoundingBox(coords=(self.coord,))
+            self._extent = Extent(coords=(self.coord,))
         return self._extent
 
     # From a modularity standpoint, it would be reasonable to cache
@@ -401,25 +391,25 @@ class Point:
     # distance to heat map, but this is substantially faster.
     heat_cache = {}
     @classmethod
-    def InitializeHeatCache(cls, kernel):
+    def _initialize_heat_cache(cls, kernel):
         cache = {}
         for x in range(kernel.radius + 1):
             for y in range(kernel.radius + 1):
-                cache[(x, y)] = kernel.Heat(cls.GeneralDistance(x, y))
+                cache[(x, y)] = kernel.heat(cls.general_distance(x, y))
         cls.heat_cache[kernel] = cache
 
-    def AddHeatToMatrix(self, matrix, kernel):
+    def add_heat_to_matrix(self, matrix, kernel):
         if kernel not in Point.heat_cache:
-            Point.InitializeHeatCache(kernel)
+            Point._initialize_heat_cache(kernel)
         cache = Point.heat_cache[kernel]
         x = int(self.coord.x)
         y = int(self.coord.y)
         for dx in range(-kernel.radius, kernel.radius + 1):
             for dy in range(-kernel.radius, kernel.radius + 1):
-                matrix.Add(Coordinate(x + dx, y + dy),
+                matrix.add(Coordinate(x + dx, y + dy),
                            self.weight * cache[(abs(dx), abs(dy))])
 
-    def Map(self, func):
+    def map(self, func):
         return Point(func(self.coord), self.weight)
 
 
@@ -430,7 +420,7 @@ class LineSegment:
         self.weight = weight
         self.length_squared = float((self.end.x - self.start.x) ** 2 +
                                     (self.end.y - self.start.y) ** 2)
-        self.extent = BoundingBox(coords=(start, end))
+        self.extent = Extent(coords=(start, end))
 
     def __str__(self):
         return 'LineSegment(%s, %s)' % (self.start, self.end)
@@ -454,7 +444,7 @@ class LineSegment:
         dy = self.start.y + u * dy - coord.y
         return math.sqrt(dx * dx + dy * dy)
 
-    def AddHeatToMatrix(self, matrix, kernel):
+    def add_heat_to_matrix(self, matrix, kernel):
         # Iterate over every point in a bounding box around this, with an
         # extra margin given by the kernel's self-reported maximum range.
         # TODO: There is probably a more clever iteration that skips more
@@ -464,11 +454,11 @@ class LineSegment:
             for y in range(int(self.extent.min.y - kernel.radius),
                            int(self.extent.max.y + kernel.radius + 1)):
                 coord = Coordinate(x, y)
-                heat = kernel.Heat(self.distance(coord))
+                heat = kernel.heat(self.distance(coord))
                 if heat:
-                    matrix.Add(coord, self.weight * heat)
+                    matrix.add(coord, self.weight * heat)
 
-    def Map(self, func):
+    def map(self, func):
         return LineSegment(func(self.start), func(self.end))
 
 
@@ -478,7 +468,7 @@ class LinearKernel:
         self.radius = radius  # in pixels
         self.radius_float = float(radius)  # worthwhile time saver
 
-    def Heat(self, distance):
+    def heat(self, distance):
         if distance >= self.radius:
             return 0.0
         return 1.0 - (distance / self.radius_float)
@@ -492,7 +482,7 @@ class GaussianKernel:
         # the peak at a distance of radius.
         self.scale = math.log(256) / radius
 
-    def Heat(self, distance):
+    def heat(self, distance):
         '''Returns 1.0 at center, 1/e at radius pixels from center.'''
         return math.e ** (-distance * self.scale)
 
@@ -588,7 +578,7 @@ class ImageMaker():
     def save(self, matrix, filename=None):
         extent = self.config.extent_out
         if not extent:
-            extent = matrix.BoundingBox()
+            extent = matrix.extent()
         extent.resize((self.config.width or 1) - 1,
                       (self.config.height or 1) - 1)
         size = extent.size()
@@ -627,20 +617,20 @@ class ImageSeriesMaker():
         self.imgfile_template = os.path.join(self.tmpdir, 'frame-%05d.png')
 
 
-    def _SaveImage(self, matrix):
+    def _save_image(self, matrix):
         self.frame_count += 1
         logging.info('Frame %d' % (self.frame_count))
-        matrix = matrix.Finalized()
+        matrix = matrix.finalized()
         self.image_maker.save(matrix, self.imgfile_template % self.frame_count)
 
-    def MaybeSaveImage(self, matrix):
+    def maybe_save_image(self, matrix):
         self.inputs_since_output += 1
         if self.inputs_since_output >= self.config.frequency:
-            self._SaveImage(matrix)
+            self._save_image(matrix)
             self.inputs_since_output = 0
 
     @staticmethod
-    def CreateMovie(infiles, outfile, ffmpegopts):
+    def create_movie(infiles, outfile, ffmpegopts):
         command = ['ffmpeg', '-i', infiles]
         if ffmpegopts:
             # I hope they don't have spaces in their arguments
@@ -650,17 +640,17 @@ class ImageSeriesMaker():
         subprocess.call(command)
 
 
-    def MainLoop(self):
+    def run(self):
         logging.info('Putting animation frames in %s' % self.tmpdir)
         self.inputs_since_output = 0
         self.frame_count = 0
-        matrix = ProcessShapes(self.config, self.MaybeSaveImage)
+        matrix = process_shapes(self.config, self.maybe_save_image)
         if ( not self.frame_count
              or self.inputs_since_output >= self.config.straggler_threshold ):
-            self._SaveImage(matrix)
-        self.CreateMovie(self.imgfile_template,
-                         self.config.output,
-                         self.config.ffmpegopts)
+            self._save_image(matrix)
+        self.create_movie(self.imgfile_template,
+                          self.config.output,
+                          self.config.ffmpegopts)
         if self.config.keepframes:
             logging.info('The animation frames are in %s' % self.tmpdir)
         else:
@@ -668,18 +658,18 @@ class ImageSeriesMaker():
         return matrix
 
 
-def _GetOSMImage(bbox, zoom, osm_base):
+def _get_osm_image(bbox, zoom, osm_base):
     # Just a wrapper for osm.createOSMImage to translate coordinate schemes
     try:
         from osmviz.manager import PILImageManager, OSMManager
         osm = OSMManager(
             image_manager=PILImageManager('RGB'),
             server=osm_base)
-        (c1, c2) = bbox.Corners()
+        (c1, c2) = bbox.corners()
         image, bounds = osm.createOSMImage((c1.lat, c2.lat, c1.lon, c2.lon), zoom)
         (lat1, lat2, lon1, lon2) = bounds
-        return image, BoundingBox(coords=(LatLon(lat1, lon1),
-                                          LatLon(lat2, lon2)))
+        return image, Extent(coords=(LatLon(lat1, lon1),
+                                     LatLon(lat2, lon2)))
     except ImportError as e:
         logging.error(
             "ImportError: %s.\n"
@@ -688,11 +678,11 @@ def _GetOSMImage(bbox, zoom, osm_base):
         sys.exit(1)
 
 
-def _ScaleForOSMZoom(zoom):
+def _scale_for_osm_zoom(zoom):
     return 256 * pow(2, zoom) / 360.0
 
 
-def ChooseOSMZoom(config, padding):
+def choose_osm_zoom(config, padding):
     # Since we know we're only going to do this with Mercator, we could do
     # a bit more math and solve this directly, but as a first pass method,
     # we instead project the bounding box into pixel-land at a high zoom
@@ -703,9 +693,9 @@ def ChooseOSMZoom(config, padding):
         raise ValueError('For OSM, you must specify height, width, or zoom')
     crazy_zoom_level = 30
     proj = MercatorProjection()
-    scale = _ScaleForOSMZoom(crazy_zoom_level)
+    scale = _scale_for_osm_zoom(crazy_zoom_level)
     proj.pixels_per_degree = scale
-    bbox_crazy_xy = config.extent_in.Map(proj.Project)
+    bbox_crazy_xy = config.extent_in.map(proj.project)
     if config.width:
         size_ratio = width_ratio = (
             float(bbox_crazy_xy.size().x) / (config.width - 2 * padding))
@@ -725,22 +715,22 @@ def ChooseOSMZoom(config, padding):
     return zoom
 
 
-def GetOSMBackground(config, padding):
-    zoom = ChooseOSMZoom(config, padding)
+def get_osm_background(config, padding):
+    zoom = choose_osm_zoom(config, padding)
     proj = MercatorProjection()
-    proj.pixels_per_degree = _ScaleForOSMZoom(zoom)
-    bbox_xy = config.extent_in.Map(proj.Project)
+    proj.pixels_per_degree = _scale_for_osm_zoom(zoom)
+    bbox_xy = config.extent_in.map(proj.project)
     # We're not checking that the padding fits within the specified size.
-    bbox_xy.Grow(padding)
-    bbox_ll = bbox_xy.Map(proj.InverseProject)
-    image, img_bbox_ll = _GetOSMImage(bbox_ll, zoom, config.osm_base)
-    img_bbox_xy = img_bbox_ll.Map(proj.Project)
+    bbox_xy.grow(padding)
+    bbox_ll = bbox_xy.map(proj.inverse_project)
+    image, img_bbox_ll = _get_osm_image(bbox_ll, zoom, config.osm_base)
+    img_bbox_xy = img_bbox_ll.map(proj.project)
 
     # TODO: this crops to our data extent, which means we're not making
     # an image of the requested dimensions.  Perhaps we should let the
     # user specify whether to treat the requested size as min,max,exact.
     (x_offset, y_offset) = map(
-        lambda a, b: a - b, bbox_xy.Corners()[0], img_bbox_xy.Corners()[0])
+        lambda a, b: a - b, bbox_xy.corners()[0], img_bbox_xy.corners()[0])
     image = image.crop((
         x_offset,
         y_offset,
@@ -752,13 +742,13 @@ def GetOSMBackground(config, padding):
     (config.width, config.height) = image.size
     return image, bbox_ll, proj
 
-def ProcessShapes(config, hook=None):
-    matrix = Matrix.MatrixFactory(config.decay)
+def process_shapes(config, hook=None):
+    matrix = Matrix.matrix_factory(config.decay)
     logging.info('processing data')
     for shape in config.shapes:
-        shape = shape.Map(config.projection.Project)
+        shape = shape.map(config.projection.project)
         # TODO: skip shapes outside map extent
-        shape.AddHeatToMatrix(matrix, config.kernel)
+        shape.add_heat_to_matrix(matrix, config.kernel)
         if hook:
             hook(matrix)
     return matrix
@@ -1029,9 +1019,10 @@ class Configuration(object):
             self.shapes = shapes_from_csv(options.csv, options.ignore_csv_header)
 
         if options.extent:
-            (lat1, lon1, lat2, lon2) = [float(f) for f in options.extent.split(',')]
-            self.extent_in = BoundingBox(coords=(LatLon(lat1, lon1),
-                                                 LatLon(lat2, lon2)))
+            (lat1, lon1, lat2, lon2) = \
+                   [float(f) for f in options.extent.split(',')]
+            self.extent_in = Extent(coords=(LatLon(lat1, lon1),
+                                            LatLon(lat2, lon2)))
         if options.background_image:
             self.background_image = Image.open(options.background_image)
             (self.width, self.height) = background_image.size
@@ -1046,14 +1037,14 @@ class Configuration(object):
             logging.debug('reading input data')
             self.shapes = list(self.shapes)
             logging.debug('read %d shapes' % len(self.shapes))
-            self.extent_in = BoundingBox(shapes=self.shapes)
+            self.extent_in = Extent(shapes=self.shapes)
 
         if self.osm:
-            GetOSMBackground(self, padding)
+            get_osm_background(self, padding)
         else:
             if not self.projection.is_scaled():
-                self.projection.AutoSetScale(self.extent_in, padding,
-                                             self.width, self.height)
+                self.projection.auto_set_scale(self.extent_in, padding,
+                                               self.width, self.height)
                 if not (self.width or self.height or self.background_image):
                     raise ValueError('You must specify width or height or scale '
                                      'or background_image or both osm and zoom.')
@@ -1068,10 +1059,10 @@ class Configuration(object):
                     'background brightness specified, but no background image')
         
         if not self.extent_out:
-            self.extent_out = self.extent_in.Map(self.projection.Project)
-            self.extent_out.Grow(padding)
-        logging.info('input extent: %s' % str(self.extent_out.Map(
-            self.projection.InverseProject)))
+            self.extent_out = self.extent_in.map(self.projection.project)
+            self.extent_out.grow(padding)
+        logging.info('input extent: %s' % str(self.extent_out.map(
+            self.projection.inverse_project)))
         logging.info('output extent: %s' % str(self.extent_out))
 
 
@@ -1095,10 +1086,10 @@ def main():
         config.fill_missing()
         if options.animate:
             animator = ImageSeriesMaker(config)
-            matrix = animator.MainLoop()
+            matrix = animator.run()
         else:
-            matrix = ProcessShapes(config)
-            matrix = matrix.Finalized()
+            matrix = process_shapes(config)
+            matrix = matrix.finalized()
 
     if options.output and not options.animate:
         ImageMaker(config).save(matrix)
