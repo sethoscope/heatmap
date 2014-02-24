@@ -53,6 +53,9 @@ class Coordinate(object):
     def __str__(self):
         return '(%s, %s)' % (str(self.x), str(self.y))
 
+    def __hash__(self):
+        return hash((self.x, self.y))
+
     def __eq__(self, o):
         return True if self.x == o.x and self.y == o.y else False
 
