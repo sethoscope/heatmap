@@ -17,6 +17,5 @@ script:
     - ./test/test_projections.py
     - ./test/test_gpx.py
     - ./test/test_projection_scale.py
-    - ./test/test_animation.py
     - ./test/test_random.py
     - if [ "$TRAVIS_PYTHON_VERSION" == "2.7" ]; then ./test/test_gradients.py; fi
