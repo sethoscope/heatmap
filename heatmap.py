@@ -179,18 +179,18 @@ class Projection(object):
         padding *= 2  # padding-per-edge -> padding-in-each-dimension
         if height:
             # TODO: div by zero error if all data exists at a single point.
-            pixels_per_degree = pixels_per_lat = (
+            self.pixels_per_degree = pixels_per_lat = (
                 float(height - padding) /
                 extent_out.size().y * SCALE_FACTOR)
         if width:
             # TODO: div by zero error if all data exists at a single point.
-            pixels_per_degree = (
+            self.pixels_per_degree = (
                 float(width - padding) /
                 extent_out.size().x * SCALE_FACTOR)
             if height:
-                pixels_per_degree = min(pixels_per_degree, pixels_per_lat)
-        assert(pixels_per_degree > 0)
-        self.pixels_per_degree = pixels_per_degree
+                self.pixels_per_degree = min(self.pixels_per_degree,
+                                             pixels_per_lat)
+        assert(self.pixels_per_degree > 0)
 
 
 # Treats Lat/Lon as a square grid.
@@ -1083,6 +1083,8 @@ def main():
         matrix = pickle.load(open(options.load, 'rb'))
         config = matrix['config']
         del matrix['config']
+        config.set_from_options(options)
+        config.fill_missing()
     else:
         config.set_from_options(options)
         config.fill_missing()
