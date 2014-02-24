@@ -576,8 +576,7 @@ class ImageMaker():
         return tuple(
             map(lambda aa, bb: int(aa * alpha + bb * (1 - alpha)), a[:3], b))
 
-
-    def save(self, matrix, filename=None):
+    def make_image(self, matrix):
         extent = self.config.extent_out
         if not extent:
             extent = matrix.extent()
@@ -607,7 +606,7 @@ class ImageMaker():
         if self.config.background_image:
             img = Image.composite(img, self.config.background_image,
                                   img.split()[3])
-        img.save(filename or self.config.output)
+        return img
 
 
 class ImageSeriesMaker():
@@ -623,7 +622,8 @@ class ImageSeriesMaker():
         self.frame_count += 1
         logging.info('Frame %d' % (self.frame_count))
         matrix = matrix.finalized()
-        self.image_maker.save(matrix, self.imgfile_template % self.frame_count)
+        image = self.image_maker.make_image(matrix)
+        image.save(self.imgfile_template % self.frame_count)
 
     def maybe_save_image(self, matrix):
         self.inputs_since_output += 1
@@ -1094,7 +1094,8 @@ def main():
             matrix = matrix.finalized()
 
     if options.output and not options.animate:
-        ImageMaker(config).save(matrix)
+        image = ImageMaker(config).make_image(matrix)
+        image.save(options.output)
 
     if options.save:
         logging.info('saving data')

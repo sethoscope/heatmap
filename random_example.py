@@ -33,9 +33,8 @@ def shapes_generator(count):
         b = random.gauss(10, 2.0)
         yield hm.Point(hm.LatLon(a, b),)
 
-def setup_config(count, outfile):
+def setup_config(count):
     config = hm.Configuration()
-    config.output = outfile
     config.shapes = shapes_generator(count)
     config.projection = hm.EquirectangularProjection()
     config.projection.pixels_per_degree = 30
@@ -62,10 +61,11 @@ def main():
 
     logging.debug('python version %s' % str(sys.version))
 
-    config = setup_config(args.count, args.output)
+    config = setup_config(args.count)
     matrix = hm.process_shapes(config)
     matrix = matrix.finalized()
-    hm.ImageMaker(config).save(matrix)
+    image = hm.ImageMaker(config).make_image(matrix)
+    image.save(args.output)
 
 if __name__ == '__main__':
     main()
