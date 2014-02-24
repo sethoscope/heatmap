@@ -177,19 +177,23 @@ class Projection(object):
         self.pixels_per_degree = SCALE_FACTOR
         extent_out = extent_in.map(self.project)
         padding *= 2  # padding-per-edge -> padding-in-each-dimension
-        if height:
-            # TODO: div by zero error if all data exists at a single point.
-            self.pixels_per_degree = pixels_per_lat = (
-                float(height - padding) /
-                extent_out.size().y * SCALE_FACTOR)
-        if width:
-            # TODO: div by zero error if all data exists at a single point.
-            self.pixels_per_degree = (
-                float(width - padding) /
-                extent_out.size().x * SCALE_FACTOR)
+        try:
             if height:
-                self.pixels_per_degree = min(self.pixels_per_degree,
-                                             pixels_per_lat)
+                self.pixels_per_degree = pixels_per_lat = (
+                    float(height - padding) /
+                    extent_out.size().y * SCALE_FACTOR)
+            if width:
+                self.pixels_per_degree = (
+                    float(width - padding) /
+                    extent_out.size().x * SCALE_FACTOR)
+                if height:
+                    self.pixels_per_degree = min(self.pixels_per_degree,
+                                                 pixels_per_lat)
+        except ZeroDivisionError:
+            raise ZeroDivisionError(
+                'You need at least two data points for auto scaling. '
+                'Try specifying the scale explicitly (or extent + '
+                'height or width).')
         assert(self.pixels_per_degree > 0)
 
 
