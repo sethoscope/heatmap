@@ -48,7 +48,7 @@ class Coordinate(object):
     second = property(lambda self: self.y)
 
     def copy(self):
-        return self.__class__(self.x, self.y)
+        return self.__class__(self.first, self.second)
 
     def __str__(self):
         return '(%s, %s)' % (str(self.x), str(self.y))

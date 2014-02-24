@@ -17,6 +17,7 @@ class Tests(unittest.TestCase):
         self.assertEqual(coord.y, 2)
         self.assertEqual(coord.first, coord.x)
         self.assertEqual(coord.second, coord.y)
+        self.assertEqual(coord, coord.copy())
 
     def test_latlon(self):
         '''Test LatLon class.'''
@@ -25,6 +26,8 @@ class Tests(unittest.TestCase):
         self.assertEqual(coord.lon, -122)
         self.assertEqual(coord.y, 37)
         self.assertEqual(coord.x, -122)
+
+        self.assertEqual(coord, coord.copy())
 
         # test order
         self.assertEqual(coord.first, coord.lat)
