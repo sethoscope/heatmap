@@ -10,6 +10,7 @@ before_install:
 install:
     - pip install --quiet git+https://github.com/python-imaging/Pillow.git
     - sudo apt-get --quiet=2 install perceptualdiff
+    - sudo apt-get --quiet=2 install ffmpeg
 
 script:
     - ./test/test.py
@@ -18,4 +19,5 @@ script:
     - ./test/test_gpx.py
     - ./test/test_projection_scale.py
     - ./test/test_random.py
+    - ./test/test_animation.py
     - if [ "$TRAVIS_PYTHON_VERSION" == "2.7" ]; then ./test/test_gradients.py; fi
