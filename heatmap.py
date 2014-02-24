@@ -252,7 +252,7 @@ class Extent():
 
     def from_shapes(self, shapes):
         shapes = iter(shapes)
-        self.from_bounding_box(shapes.next().extent)
+        self.from_bounding_box(next(shapes).extent)
         for s in shapes:
             self.update(s.extent)
 
@@ -782,7 +782,7 @@ def shapes_from_csv(filename, ignore_csv_header):
     with open(filename, 'ru') as f:
         reader = csv.reader(f)
         if ignore_csv_header:
-            reader.next()  # Skip header line
+            next(reader)  # Skip header line
         for row in reader:
             (lat, lon) = (float(row[0]), float(row[1]))
             count += 1
