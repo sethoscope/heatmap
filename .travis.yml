@@ -8,7 +8,7 @@ before_install:
     - sudo ln -s /usr/lib/`uname -i`-linux-gnu/libz.so ~/virtualenv/python2.7/lib/
 
 install:
-    - if [ "$TRAVIS_PYTHON_VERSION" == "3.2" ]; then pip install --quiet git+https://github.com/python-imaging/Pillow.git; else pip --quiet install --allow-external pil; fi
+    - pip install --quiet git+https://github.com/python-imaging/Pillow.git
     - sudo apt-get --quiet=2 install perceptualdiff
 
 script:
