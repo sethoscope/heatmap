@@ -59,6 +59,9 @@ class Coordinate(object):
     def __eq__(self, o):
         return True if self.x == o.x and self.y == o.y else False
 
+    def __sub__(self, o):
+        return self.__class__(self.first - o.first, self.second - o.second)
+
 
 class LatLon(Coordinate):
     def __init__(self, lat, lon):
@@ -735,13 +738,12 @@ def get_osm_background(config, padding):
     # TODO: this crops to our data extent, which means we're not making
     # an image of the requested dimensions.  Perhaps we should let the
     # user specify whether to treat the requested size as min,max,exact.
-    (x_offset, y_offset) = map(
-        lambda a, b: a - b, bbox_xy.corners()[0], img_bbox_xy.corners()[0])
+    offset = bbox_xy.min - img_bbox_xy.min
     image = image.crop((
-        x_offset,
-        y_offset,
-        x_offset + bbox_xy.size().x + 1,
-        y_offset + bbox_xy.size().y + 1))
+        int(offset.x),
+        int(offset.y),
+        int(offset.x + bbox_xy.size().x + 1),
+        int(offset.y + bbox_xy.size().y + 1)))
     config.background_image = image
     config.extent_in = bbox_ll
     config.projection = proj
