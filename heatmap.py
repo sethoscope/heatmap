@@ -1017,13 +1017,13 @@ class Configuration(object):
                                      hsva_max = ColorMap.str_to_hsva(options.hsva_max))
 
         if options.gpx:
-            logging.debug('Reading from gpx: %s' + options.gpx)
+            logging.debug('Reading from gpx: %s' % options.gpx)
             self.shapes = shapes_from_gpx(options.gpx)
         elif options.points:
-            logging.debug('Reading from points: %s' + options.points)
+            logging.debug('Reading from points: %s' % options.points)
             self.shapes = shapes_from_file(options.points)
         elif options.csv:
-            logging.debug('Reading from csv: %s' + options.csv)
+            logging.debug('Reading from csv: %s' % options.csv)
             self.shapes = shapes_from_csv(options.csv, options.ignore_csv_header)
 
         if options.extent:
