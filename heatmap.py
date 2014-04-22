@@ -788,7 +788,7 @@ def shapes_from_csv(filename, ignore_csv_header):
     import csv
     logging.info('reading csv')
     count = 0
-    with open(filename, 'ru') as f:
+    with open(filename, 'rU') as f:
         reader = csv.reader(f)
         if ignore_csv_header:
             next(reader)  # Skip header line
