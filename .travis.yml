@@ -10,14 +10,25 @@ before_install:
     - sudo ln -s /usr/lib/`uname -i`-linux-gnu/libz.so ~/virtualenv/python2.7/lib/
 
 install:
+    - pip install coveralls
     - pip install --quiet git+https://github.com/python-imaging/Pillow.git
     - sudo apt-get --quiet=2 install perceptualdiff
 
 script:
-    - ./test/test.py
-    - ./test/test_coordinates.py
-    - ./test/test_projections.py
-    - ./test/test_gpx.py
-    - ./test/test_projection_scale.py
-    - ./test/test_random.py
-    - ./test/test_gradients.py
+    - coverage erase
+    - coverage run --append ./test/test.py
+    - coverage run --append ./test/test_coordinates.py
+    - coverage run --append ./test/test_projections.py
+    - coverage run --append ./test/test_gpx.py
+    - coverage run --append ./test/test_projection_scale.py
+    - coverage run --append ./test/test_random.py
+    - coverage run --append ./test/test_gradients.py
+
+after_success:
+    - coverage report
+    - coveralls
+    - pip install pep8 pyflakes
+    - pep8 *.py
+    - pyflakes *.py
+    - pep8 test/*.py
+    - pyflakes test/*.py
