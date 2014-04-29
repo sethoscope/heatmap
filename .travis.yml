@@ -1,8 +1,11 @@
 language: python
 
 python:
+    - "pypy"
+    - "2.6"
     - "2.7"
     - "3.2"
+    - "3.3"
 
 before_install:
     - sudo ln -s /usr/lib/`uname -i`-linux-gnu/libz.so ~/virtualenv/python2.7/lib/
@@ -19,3 +22,9 @@ script:
     - ./test/test_projection_scale.py
     - ./test/test_random.py
     - ./test/test_gradients.py
+
+matrix:
+  allow_failures:
+    - python: "pypy"
+    - python: "2.6"
+    - python: "3.3"
