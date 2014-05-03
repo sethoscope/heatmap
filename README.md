@@ -24,7 +24,7 @@ It's not good for:
 So... why use a slow data visualizer that doesn't run in a browser?
 Because the output looks better.
 
-There's another kind of heatmap, also called a cloropleth map, in
+There's another kind of heatmap, also called a choropleth map, in
 which you divide your map into regions and color each region to
 indicate something.  This tool is not for that.
 
