@@ -3,12 +3,15 @@
 
 import os
 import subprocess
-import unittest
 import sys
+
+try:
+    import unittest2 as unittest  # Python 2.6
+except ImportError:
+    import unittest
 
 ROOT_DIR = os.path.split(os.path.abspath(os.path.dirname(__file__)))[0]
 sys.path.append(ROOT_DIR)
-import heatmap as hm
 
 
 class Tests(unittest.TestCase):
@@ -31,7 +34,7 @@ class Tests(unittest.TestCase):
             self.assertTrue(os.path.exists(output_file))
             self.assertTrue(os.path.isfile(output_file))
             self.assertGreater(os.path.getsize(output_file), 0)
-            
+
         finally:
             try:
                 os.remove(output_file)

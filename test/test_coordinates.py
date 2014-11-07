@@ -2,14 +2,20 @@
 """Test coordinate classes."""
 
 import os
-import unittest
 import sys
+
+try:
+    import unittest2 as unittest  # Python 2.6
+except ImportError:
+    import unittest
 
 ROOT_DIR = os.path.split(os.path.abspath(os.path.dirname(__file__)))[0]
 sys.path.append(ROOT_DIR)
 import heatmap as hm
 
+
 class Tests(unittest.TestCase):
+
     def test_basic(self):
         '''Test Coordinate class.'''
         coord = hm.Coordinate(1, 2)
@@ -40,9 +46,7 @@ class Tests(unittest.TestCase):
         coord.y = 10
         self.assertEqual(coord.lat, 10)
         self.assertEqual(coord.y, 10)
-        
-        
-        
+
 
 if __name__ == '__main__':
     unittest.main()
