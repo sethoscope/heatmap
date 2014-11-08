@@ -34,3 +34,4 @@ A more thorough description and examples are posted at
 ## Tests
 
 [![Build Status](https://travis-ci.org/sethoscope/heatmap.png?branch=master)](https://travis-ci.org/sethoscope/heatmap)
+[![Coverage Status](https://coveralls.io/repos/sethoscope/heatmap/badge.png?branch=master)](https://coveralls.io/r/sethoscope/heatmap?branch=master)
