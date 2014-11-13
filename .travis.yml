@@ -17,13 +17,13 @@ install:
 
 script:
     - coverage erase
-    - coverage run --append ./test/test.py
-    - coverage run --append ./test/test_coordinates.py
-    - coverage run --append ./test/test_projections.py
-    - coverage run --append ./test/test_gpx.py
-    - coverage run --append ./test/test_projection_scale.py
-    - coverage run --append ./test/test_random.py
-    - coverage run --append ./test/test_gradients.py
+    - coverage run --source heatmap --append ./test/test.py
+    - coverage run --source heatmap --append ./test/test_coordinates.py
+    - coverage run --source heatmap --append ./test/test_projections.py
+    - coverage run --source heatmap --append ./test/test_gpx.py
+    - coverage run --source heatmap --append ./test/test_projection_scale.py
+    - coverage run --source heatmap --append ./test/test_random.py
+    - coverage run --source heatmap --append ./test/test_gradients.py
 
 after_success:
     - coverage report
