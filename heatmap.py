@@ -67,7 +67,7 @@ class LatLon(Coordinate):
     def __init__(self, lat, lon):
         self.lat = lat
         self.lon = lon
-    
+
     def get_lat(self):
         return self.y
 
@@ -119,7 +119,7 @@ class TrackLog:
 
     def __init__(self, filename):
         self.filename = filename
-    
+
     def segments(self):
         '''Parse file and yield segments containing points'''
         logging.info('reading GPX track from %s' % self.filename)
@@ -798,6 +798,29 @@ def shapes_from_csv(filename, ignore_csv_header):
             yield Point(LatLon(lat, lon))
         logging.info('read %d points' % count)
 
+def shapes_from_shp(filename):
+    try:
+        import ogr
+    except ImportError:
+        try:
+            from osgeo import ogr
+        except ImportError:
+            raise ImportError('You need to have python-gdal bindings installed')
+
+    shapefile = filename
+    driver = ogr.GetDriverByName("ESRI Shapefile")
+    dataSource = driver.Open(shapefile, 0)
+    if dataSource is None:
+        raise Exception("Not a valid shape file")
+
+    layer = dataSource.GetLayer()
+
+    for feature in layer:
+        geom = feature.GetGeometryRef()
+        #print geom.Centroid().ExportToWkt()
+
+    logging.info('si pude pero no quiero')
+    sys.exit()
 
 class Configuration(object):
     '''
@@ -815,7 +838,7 @@ class Configuration(object):
 
     In the second phase, various other parameters are computed.  These
     are things we set automatically based on the other settings or on
-    the data.  You can skip this if you set everything manually, but 
+    the data.  You can skip this if you set everything manually, but
 
     The idea is that someone could import this module, populate a
     Configuration instance manually, and run the process themselves.
@@ -878,7 +901,7 @@ class Configuration(object):
     def set_defaults(self):
         (options, args) = self.optparser.parse_args([])
         self.set_from_options(options)
-    
+
     def _make_optparser(self):
         '''Return a an OptionParser set up for our command line options.'''
         # TODO: convert to argparse
@@ -898,7 +921,9 @@ class Configuration(object):
         optparser.add_option(
             '', '--ignore_csv_header', action='store_true',
             help='Ignore first line of CSV input file.')
-
+        optparser.add_option(
+            '', '--shp_file', metavar='FILE',
+            help='ESRI Shapefile containing the points.')
         optparser.add_option(
             '-s', '--scale', metavar='FLOAT', type='float',
             help='meters per pixel, approximate'),
@@ -1025,6 +1050,9 @@ class Configuration(object):
         elif options.csv:
             logging.debug('Reading from csv: %s' % options.csv)
             self.shapes = shapes_from_csv(options.csv, options.ignore_csv_header)
+        elif options.shp_file:
+            logging.debug('Reading from Shape File: %s' % options.shp_file)
+            self.shapes = shapes_from_shp(options.shp_file)
 
         if options.extent:
             (lat1, lon1, lat2, lon2) = \
@@ -1065,7 +1093,7 @@ class Configuration(object):
             else:
                 logging.warning(
                     'background brightness specified, but no background image')
-        
+
         if not self.extent_out:
             self.extent_out = self.extent_in.map(self.projection.project)
             self.extent_out.grow(padding)
