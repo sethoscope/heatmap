@@ -17,7 +17,7 @@ install:
     - pip install coveralls
     - pip install --quiet git+https://github.com/python-imaging/Pillow.git
     - sudo apt-get --quiet=2 install perceptualdiff
-    - sudo apt-get -y python-gdal
+    - sudo apt-get install -y python-gdal
 
 script:
     - coverage erase
