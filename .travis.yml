@@ -27,6 +27,7 @@ script:
     - coverage run --source heatmap --append ./test/test_projection_scale.py
     - coverage run --source heatmap --append ./test/test_random.py
     - coverage run --source heatmap --append ./test/test_gradients.py
+    - coverage run --source heatmap --append ./test/test_shp_file.py
 
 after_success:
     - coverage report

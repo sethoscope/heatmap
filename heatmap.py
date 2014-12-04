@@ -801,26 +801,45 @@ def shapes_from_csv(filename, ignore_csv_header):
 def shapes_from_shp(filename):
     try:
         import ogr
+        import osr
     except ImportError:
         try:
             from osgeo import ogr
+            from osgeo import osr
         except ImportError:
             raise ImportError('You need to have python-gdal bindings installed')
 
-    shapefile = filename
     driver = ogr.GetDriverByName("ESRI Shapefile")
-    dataSource = driver.Open(shapefile, 0)
+    dataSource = driver.Open(filename, 0)
     if dataSource is None:
         raise Exception("Not a valid shape file")
 
     layer = dataSource.GetLayer()
+    if layer.GetGeomType() != 1:
+        raise Exception("Only point layers are supported")
 
+    spatial_reference = layer.GetSpatialRef()
+    if spatial_reference is None:
+        raise Exception("The shapefile doesn't have spatial reference")
+
+    spatial_reference.AutoIdentifyEPSG()
+    auth_code = spatial_reference.GetAuthorityCode(None)
+    if auth_code == '':
+        raise Exception("The input shapefile projection could not be recognized")
+
+    if auth_code != '4326':
+        # TODO: implement reproject layer (maybe geometry by geometry is easier)
+        raise Exception("Currently only Lng-Lat WGS84 is supported (EPSG 4326)")
+
+    count = 0
     for feature in layer:
         geom = feature.GetGeometryRef()
-        #print geom.Centroid().ExportToWkt()
+        lat = geom.GetY()
+        lon = geom.GetX()
+        count +=1
+        yield Point(LatLon(lat,lon))
 
-    logging.info('si pude pero no quiero')
-    sys.exit()
+    logging.info('read %d points' % count)
 
 class Configuration(object):
     '''
@@ -923,7 +942,7 @@ class Configuration(object):
             help='Ignore first line of CSV input file.')
         optparser.add_option(
             '', '--shp_file', metavar='FILE',
-            help='ESRI Shapefile containing the points.')
+            help=('ESRI Shapefile containing the points.'))
         optparser.add_option(
             '-s', '--scale', metavar='FLOAT', type='float',
             help='meters per pixel, approximate'),
