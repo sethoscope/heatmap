@@ -836,7 +836,7 @@ def shapes_from_shp(filename):
         geom = feature.GetGeometryRef()
         lat = geom.GetY()
         lon = geom.GetX()
-        count +=1
+        count += 1
         yield Point(LatLon(lat,lon))
 
     logging.info('read %d points' % count)
