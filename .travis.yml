@@ -5,13 +5,11 @@ python:
     - "pypy3"
     - "2.6"
     - "2.7"
+    - "2.7_with_system_site_packages"
     - "3.2"
+    - "3.2_with_system_site_packages"
     - "3.3"
     - "3.4"
-
-# for gdal
-virtualenv:
-   system_site_packages: true
 
 before_install:
     - sudo ln -s /usr/lib/`uname -i`-linux-gnu/libz.so ~/virtualenv/python2.7/lib/
@@ -36,8 +34,8 @@ script:
     - coverage run --source heatmap --append ./test/test_random.py
     - coverage run --source heatmap --append ./test/test_gradients.py
 
-    # gdal only installed for python 2.7
-    - if [ "$TRAVIS_PYTHON_VERSION" == "2.7" ]; then coverage run --source heatmap --append ./test/test_shp_file.py; fi
+    # we only have gdal in system packages
+    - if [ "$TRAVIS_PYTHON_VERSION" == "2.7_with_system_site_packages" -o "$TRAVIS_PYTHON_VERSION" == "3.2_with_system_site_packages" ]; then coverage run --source heatmap --append ./test/test_shp_file.py; fi
 
 after_success:
     - coverage report
