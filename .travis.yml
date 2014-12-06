@@ -16,13 +16,12 @@ before_install:
 
 install:
     - if [ "$TRAVIS_PYTHON_VERSION" == "2.6" ]; then travis_retry pip install unittest2; fi
-    - pip install coveralls
-    - pip install --quiet git+https://github.com/python-imaging/Pillow.git
-    - sudo add-apt-repository -y ppa:ubuntugis/ubuntugis-unstable
-    - sudo apt-get update -qq
-    - sudo apt-get --quiet=2 install perceptualdiff
-    - sudo apt-get install libgdal1h
-    - sudo apt-get install -y python-gdal python3-gdal
+    - travis_retry pip install coveralls
+    - travis_retry pip install --quiet git+https://github.com/python-imaging/Pillow.git
+    - travis_retry sudo apt-get --quiet=2 install perceptualdiff
+
+    # we only have gdal in system packages
+    - if [ "$TRAVIS_PYTHON_VERSION" == "2.7_with_system_site_packages" -o "$TRAVIS_PYTHON_VERSION" == "3.2_with_system_site_packages" ]; then pushd depends && ./install_gdal.sh && popd; fi
 
 script:
     - coverage erase
@@ -40,7 +39,7 @@ script:
 after_success:
     - coverage report
     - coveralls
-    - pip install pep8 pyflakes
+    - travis_retry pip install pep8 pyflakes
     - pep8 *.py
     - pyflakes *.py
     - pep8 test/*.py
