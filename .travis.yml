@@ -22,7 +22,7 @@ install:
     - sudo apt-get update -qq
     - sudo apt-get --quiet=2 install perceptualdiff
     - sudo apt-get install libgdal1h
-    - sudo apt-get install -y python-gdal
+    - sudo apt-get install -y python-gdal python3-gdal
 
 script:
     - coverage erase
