@@ -1080,7 +1080,7 @@ class Configuration(object):
                                             LatLon(lat2, lon2)))
         if options.background_image:
             self.background_image = Image.open(options.background_image)
-            (self.width, self.height) = background_image.size
+            (self.width, self.height) = self.background_image.size
 
 
     def fill_missing(self):
