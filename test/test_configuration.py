@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """Test coordinate classes."""
 
+import os
 import sys
 
 try:
