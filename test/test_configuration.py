@@ -8,6 +8,8 @@ try:
 except ImportError:
     import unittest
 
+ROOT_DIR = os.path.split(os.path.abspath(os.path.dirname(__file__)))[0]
+sys.path.append(ROOT_DIR)
 import heatmap as hm
 
 
@@ -20,7 +22,6 @@ class Tests(unittest.TestCase):
 
     def test_basic(self):
         '''Test Configuration class.'''
-
         # Act
         config = hm.Configuration(use_defaults=True)
 
