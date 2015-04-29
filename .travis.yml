@@ -34,6 +34,7 @@ script:
     - coverage run --source heatmap --append ./test/test_configuration.py
 
     # test_system_*.py call heatmap.py directly with coverage
+    - ./test/test_system.py
     - ./test/test_system_gpx.py
 
 
