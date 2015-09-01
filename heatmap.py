@@ -541,6 +541,18 @@ class ColorMap:
             num_rows = image.size[1]
             self.values = [image.getpixel((0, row)) for row in range(num_rows)]
             self.values.reverse()
+            if self.values[0][3] != 0:
+                logging.warn('In gradient image %s, the bottom-left pixel is '
+                             'not fully transparent. If the output appears '
+                             'blocky, make sure your gradient image '
+                             'transitions to fully transparent at the bottom.'
+                             % os.path.basename(image.filename))
+            if self.values[-1][3] != 255:
+                logging.warn('In gradient image %s, the top-left pixel is '
+                             'not fully opaque. If the output appears '
+                             'dim, try increasing the opacity of the '
+                             'upper region of your gradient image.'
+                             % os.path.basename(image.filename))
         else:
             if not hsva_min:
                 hsva_min = ColorMap.str_to_hsva(self.DEFAULT_HSVA_MIN_STR)
