@@ -493,6 +493,8 @@ class GaussianKernel:
 
     def heat(self, distance):
         '''Returns 1.0 at center, 1/e at radius pixels from center.'''
+        if distance >= self.radius:
+            return 0.0
         return math.e ** (-distance * self.scale)
 
 
@@ -613,6 +615,8 @@ class ImageMaker():
         maxval = max(matrix.values())
         pixels = img.load()
         for (coord, val) in matrix.items():
+            if val == 0.0:
+                continue
             x = int(coord.x - extent.min.x)
             y = int(coord.y - extent.min.y)
             if extent.is_inside(coord):
