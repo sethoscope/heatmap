@@ -17,6 +17,11 @@ import heatmap as hm
 
 class Tests(unittest.TestCase):
 
+    # To remove Python 3's
+    # "DeprecationWarning: Please use assertRaisesRegex instead"
+    if sys.version_info[0] == 2:
+        assertRaisesRegex = unittest.TestCase.assertRaisesRegexp
+
     def test_units(self):
         '''Test projection units.'''
         p = hm.Projection()
@@ -62,6 +67,43 @@ class Tests(unittest.TestCase):
                 os.remove(output_file_2)
             except OSError:
                 pass  # perhaps it was never created
+
+    def test_has_pixels_per_degree(self):
+        # Arrange
+        p = hm.Projection()
+        p.pixels_per_degree = 2
+
+        # Act
+        scaled = p.is_scaled()
+        ppd = p.get_pixels_per_degree()
+
+        # Assert
+        self.assertTrue(scaled)
+        self.assertEqual(ppd, 2)
+
+    def test_no_pixels_per_degree(self):
+        # Arrange
+        p = hm.Projection()
+
+        # Act
+        scaled = p.is_scaled()
+
+        # Assert
+        self.assertFalse(scaled)
+        with self.assertRaisesRegex(AttributeError,
+                                    "projection scale was never set"):
+            p.get_pixels_per_degree()
+
+    def test_not_implemented(self):
+        # Arrange
+        p = hm.Projection()
+        coords = 0
+
+        # Act / Assert
+        with self.assertRaisesRegex(NotImplementedError, ""):
+            p.project(coords)
+        with self.assertRaisesRegex(NotImplementedError, ""):
+            p.inverse_project(coords)
 
 
 if __name__ == '__main__':

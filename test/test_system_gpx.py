@@ -1,25 +1,18 @@
 #!/usr/bin/env python
 """Test case."""
 
+from helper import TestHeatmap, unittest, ROOT_DIR
+
 import os
 import subprocess
-import sys
-
-try:
-    import unittest2 as unittest  # Python 2.6
-except ImportError:
-    import unittest
-
-ROOT_DIR = os.path.split(os.path.abspath(os.path.dirname(__file__)))[0]
-sys.path.append(ROOT_DIR)
 
 
-class Tests(unittest.TestCase):
+class Tests(TestHeatmap):
 
     def test_system(self):
         output_file = os.path.join(ROOT_DIR, 'test', 'output.ppm')
         try:
-            subprocess.check_call(
+            self.helper_run(
                 [os.path.join(ROOT_DIR, 'heatmap.py'),
                  '-g', os.path.join(ROOT_DIR, 'test', 'smile.gpx'),
                  '-b', 'black',
