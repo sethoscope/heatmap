@@ -28,7 +28,6 @@ import tempfile
 import os.path
 import shutil
 import subprocess
-from time import mktime, strptime
 from collections import defaultdict
 import xml.etree.cElementTree as ET
 from colorsys import hsv_to_rgb
@@ -110,11 +109,6 @@ class TrackLog:
             elif elem.tag == 'trkpt' and event == 'end':
                 point = TrackLog.Trkpt(elem.attrib['lat'], elem.attrib['lon'])
                 self._segments[-1].append(point)
-                timestr = elem.findtext('time')
-                if timestr:
-                    timestr = timestr[:-1].split('.')[0] + ' GMT'
-                    point.time = mktime(
-                        strptime(timestr, '%Y-%m-%dT%H:%M:%S %Z'))
                 elem.clear()  # clear the trkpt node to minimize memory usage
 
     def __init__(self, filename):
@@ -493,6 +487,8 @@ class GaussianKernel:
 
     def heat(self, distance):
         '''Returns 1.0 at center, 1/e at radius pixels from center.'''
+        if distance >= self.radius:
+            return 0.0
         return math.e ** (-distance * self.scale)
 
 
@@ -541,6 +537,18 @@ class ColorMap:
             num_rows = image.size[1]
             self.values = [image.getpixel((0, row)) for row in range(num_rows)]
             self.values.reverse()
+            if self.values[0][3] != 0:
+                logging.warn('In gradient image %s, the bottom-left pixel is '
+                             'not fully transparent. If the output appears '
+                             'blocky, make sure your gradient image '
+                             'transitions to fully transparent at the bottom.'
+                             % os.path.basename(image.filename))
+            if self.values[-1][3] != 255:
+                logging.warn('In gradient image %s, the top-left pixel is '
+                             'not fully opaque. If the output appears '
+                             'dim, try increasing the opacity of the '
+                             'upper region of your gradient image.'
+                             % os.path.basename(image.filename))
         else:
             if not hsva_min:
                 hsva_min = ColorMap.str_to_hsva(self.DEFAULT_HSVA_MIN_STR)
@@ -601,6 +609,8 @@ class ImageMaker():
         maxval = max(matrix.values())
         pixels = img.load()
         for (coord, val) in matrix.items():
+            if val == 0.0:
+                continue
             x = int(coord.x - extent.min.x)
             y = int(coord.y - extent.min.y)
             if extent.is_inside(coord):
