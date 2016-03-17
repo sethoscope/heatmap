@@ -25,7 +25,7 @@ class Tests(unittest.TestCase):
         self.assertEqual(coord.second, coord.y)
         self.assertEqual(coord, coord.copy())
         self.assertEqual(str(coord), "(1, 2)")
-        self.assertEqual(hash(coord), 3713081631934410656)
+        self.assertEqual(type(hash(coord)), int)
         coord2 = hm.Coordinate(6, 12)
         self.assertEqual(coord2 - coord, hm.Coordinate(5, 10))
 
