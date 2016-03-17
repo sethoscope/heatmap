@@ -28,8 +28,6 @@ import tempfile
 import os.path
 import shutil
 import subprocess
-from time import strptime
-from calendar import timegm
 from collections import defaultdict
 import xml.etree.cElementTree as ET
 from colorsys import hsv_to_rgb
@@ -111,11 +109,6 @@ class TrackLog:
             elif elem.tag == 'trkpt' and event == 'end':
                 point = TrackLog.Trkpt(elem.attrib['lat'], elem.attrib['lon'])
                 self._segments[-1].append(point)
-                timestr = elem.findtext('time')
-                if timestr:
-                    timestr = timestr[:-1].split('.')[0] + ' GMT'
-                    point.time = timegm(
-                        strptime(timestr, '%Y-%m-%dT%H:%M:%S %Z'))
                 elem.clear()  # clear the trkpt node to minimize memory usage
 
     def __init__(self, filename):
