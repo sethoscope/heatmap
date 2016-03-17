@@ -811,11 +811,9 @@ def shapes_from_csv(filename, ignore_csv_header):
 def shapes_from_shp(filename):
     try:
         import ogr
-        import osr
     except ImportError:
         try:
             from osgeo import ogr
-            from osgeo import osr
         except ImportError:
             raise ImportError('You need to have python-gdal bindings installed')
 

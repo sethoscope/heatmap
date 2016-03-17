@@ -2,7 +2,6 @@
 """Test case."""
 
 import os
-import subprocess
 import sys
 
 try:

@@ -3,7 +3,6 @@
 
 import os
 import subprocess
-import sys
 
 from helper import TestHeatmap, unittest, ROOT_DIR
 
