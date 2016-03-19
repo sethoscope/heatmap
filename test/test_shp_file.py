@@ -21,7 +21,8 @@ class Tests(unittest.TestCase):
         try:
             subprocess.check_call(
                 [os.path.join(ROOT_DIR, 'heatmap.py'),
-                 '--shp_file', os.path.join(ROOT_DIR, 'test', 'test_shape_2.shp'),
+                 '--shp_file', os.path.join(ROOT_DIR, 'test',
+                                            'test_shape_2.shp'),
                  '-b', 'black',
                  '-r', '3',
                  '-W', '22',

@@ -1,0 +1,14 @@
+x,y,some other values,ignore those,though
+4.5,2,ignored value
+5,2,ignored,ignored
+4.5,6
+5,6
+2,0
+1,1
+0,2
+0,3,ignored
+0,4
+0,5
+0,6,another ignored value,and another,and,more,of,them
+1,7
+2,8

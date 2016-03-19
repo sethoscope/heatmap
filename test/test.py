@@ -2,7 +2,6 @@
 """Test case."""
 
 import os
-import subprocess
 import sys
 
 try:
@@ -93,6 +92,29 @@ class Tests(unittest.TestCase):
 
         # Assert
         self.assertEqual(zoom, 3)
+
+    def test_shapes_from_file(self):
+        # Arrange
+        filename = "test/few-points"
+
+        # Act
+        shapes = hm.shapes_from_file(filename)
+        shapes_list = [shape for shape in shapes]
+
+        # Assert
+        self.assertEqual(str(shapes_list[0]), "P((2.0, 4.5))")
+
+    def test_shapes_from_csv(self):
+        # Arrange
+        filename = "test/few-points.csv"
+        do_ignore_csv_header = True
+
+        # Act
+        shapes = hm.shapes_from_csv(filename, do_ignore_csv_header)
+        shapes_list = [shape for shape in shapes]
+
+        # Assert
+        self.assertEqual(str(shapes_list[0]), "P((2.0, 4.5))")
 
 if __name__ == '__main__':
     unittest.main()

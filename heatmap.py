@@ -38,6 +38,7 @@ except ImportError:
 
 __version__ = '1.11'
 
+
 class Coordinate(object):
     def __init__(self, x, y):
         self.x = x
@@ -84,6 +85,7 @@ class LatLon(Coordinate):
 
     first = property(get_lat)
     second = property(get_lon)
+
 
 class TrackLog:
     class Trkseg(list):  # for GPX <trkseg> tags
@@ -222,15 +224,16 @@ class MercatorProjection(Projection):
         return Coordinate(x, y)
 
     def inverse_project(self, coord):
-        lat = (360 / math.pi
-               * math.atan(math.exp(-coord.y / self._pixels_per_radian)) - 90)
+        lat = (360 / math.pi *
+               math.atan(math.exp(-coord.y / self._pixels_per_radian)) - 90)
         lon = coord.x / self.pixels_per_degree
         return LatLon(lat, lon)
+
 
 class Extent():
     def __init__(self, coords=None, shapes=None):
         if coords:
-            coords = tuple(coords) # if it's a generator, slurp them all
+            coords = tuple(coords)  # if it's a generator, slurp them all
             self.min = coords[0].__class__(min(c.first for c in coords),
                                            min(c.second for c in coords))
             self.max = coords[0].__class__(max(c.first for c in coords),
@@ -393,6 +396,7 @@ class Point:
     # distances, not heat values, and let the kernel cache the
     # distance to heat map, but this is substantially faster.
     heat_cache = {}
+
     @classmethod
     def _initialize_heat_cache(cls, kernel):
         cache = {}
@@ -555,7 +559,8 @@ class ColorMap:
             if not hsva_max:
                 hsva_max = ColorMap.str_to_hsva(self.DEFAULT_HSVA_MAX_STR)
             # Turn (h1,s1,v1,a1), (h2,s2,v2,a2) into (h2-h1,s2-s1,v2-v1,a2-a1)
-            hsva_range = list(map(lambda min, max: max - min, hsva_min, hsva_max))
+            hsva_range = list(map(lambda min, max: max - min,
+                                  hsva_min, hsva_max))
             for value in range(0, steps):
                 hsva = list(map(
                     lambda range, min: value / float(steps - 1) * range + min,
@@ -634,7 +639,6 @@ class ImageSeriesMaker():
         self.tmpdir = tempfile.mkdtemp()
         self.imgfile_template = os.path.join(self.tmpdir, 'frame-%05d.png')
 
-
     def _save_image(self, matrix):
         self.frame_count += 1
         logging.info('Frame %d' % (self.frame_count))
@@ -658,14 +662,13 @@ class ImageSeriesMaker():
         logging.info('Encoding video: %s' % ' '.join(command))
         subprocess.call(command)
 
-
     def run(self):
         logging.info('Putting animation frames in %s' % self.tmpdir)
         self.inputs_since_output = 0
         self.frame_count = 0
         matrix = process_shapes(self.config, self.maybe_save_image)
-        if ( not self.frame_count
-             or self.inputs_since_output >= self.config.straggler_threshold ):
+        if (not self.frame_count or
+                self.inputs_since_output >= self.config.straggler_threshold):
             self._save_image(matrix)
         self.create_movie(self.imgfile_template,
                           self.config.output,
@@ -685,7 +688,8 @@ def _get_osm_image(bbox, zoom, osm_base):
             image_manager=PILImageManager('RGB'),
             server=osm_base)
         (c1, c2) = bbox.corners()
-        image, bounds = osm.createOSMImage((c1.lat, c2.lat, c1.lon, c2.lon), zoom)
+        image, bounds = osm.createOSMImage((c1.lat, c2.lat, c1.lon, c2.lon),
+                                           zoom)
         (lat1, lat2, lon1, lon2) = bounds
         return image, Extent(coords=(LatLon(lat1, lon1),
                                      LatLon(lat2, lon2)))
@@ -760,6 +764,7 @@ def get_osm_background(config, padding):
     (config.width, config.height) = image.size
     return image, bbox_ll, proj
 
+
 def process_shapes(config, hook=None):
     matrix = Matrix.matrix_factory(config.decay)
     logging.info('processing data')
@@ -771,12 +776,14 @@ def process_shapes(config, hook=None):
             hook(matrix)
     return matrix
 
+
 def shapes_from_gpx(filename):
     track = TrackLog(filename)
     for trkseg in track.segments():
         for i, p1 in enumerate(trkseg[:-1]):
             p2 = trkseg[i + 1]
             yield LineSegment(p1.coords, p2.coords)
+
 
 def shapes_from_file(filename):
     logging.info('reading points from %s' % filename)
@@ -794,6 +801,7 @@ def shapes_from_file(filename):
                 yield Point(LatLon(lat, lon), weight)
         logging.info('read %d points' % count)
 
+
 def shapes_from_csv(filename, ignore_csv_header):
     import csv
     logging.info('reading csv')
@@ -808,16 +816,16 @@ def shapes_from_csv(filename, ignore_csv_header):
             yield Point(LatLon(lat, lon))
         logging.info('read %d points' % count)
 
+
 def shapes_from_shp(filename):
     try:
         import ogr
-        import osr
     except ImportError:
         try:
             from osgeo import ogr
-            from osgeo import osr
         except ImportError:
-            raise ImportError('You need to have python-gdal bindings installed')
+            raise ImportError("You need to have python-gdal bindings "
+                              "installed")
 
     driver = ogr.GetDriverByName("ESRI Shapefile")
     dataSource = driver.Open(filename, 0)
@@ -835,11 +843,14 @@ def shapes_from_shp(filename):
     spatial_reference.AutoIdentifyEPSG()
     auth_code = spatial_reference.GetAuthorityCode(None)
     if auth_code == '':
-        raise Exception("The input shapefile projection could not be recognized")
+        raise Exception("The input shapefile projection could not be "
+                        "recognized")
 
     if auth_code != '4326':
-        # TODO: implement reproject layer (maybe geometry by geometry is easier)
-        raise Exception("Currently only Lng-Lat WGS84 is supported (EPSG 4326)")
+        # TODO: implement reproject layer
+        # (maybe geometry by geometry is easier)
+        raise Exception("Currently only Lng-Lat WGS84 is supported "
+                        "(EPSG 4326)")
 
     count = 0
     for feature in layer:
@@ -847,9 +858,10 @@ def shapes_from_shp(filename):
         lat = geom.GetY()
         lon = geom.GetX()
         count += 1
-        yield Point(LatLon(lat,lon))
+        yield Point(LatLon(lat, lon))
 
     logging.info('read %d points' % count)
+
 
 class Configuration(object):
     '''
@@ -882,43 +894,43 @@ class Configuration(object):
         # Many of these are exactly the same as the command line option.
         # In those cases, the documentation is left blank.
         # Many have default values based on the command line defaults.
-        'output' : '',
-        'width' : '',
-        'height' : '',
-        'margin' : '',
-        'shapes' : 'unprojected iterable of shapes (Points and LineSegments)',
-        'projection' : 'Projection instance',
-        'colormap' : 'ColorMap instance',
-        'decay' : '',
-        'kernel' : 'kernel instance',
-        'extent_in' : 'extent in original space',
-        'extent_out' : 'extent in projected space',
+        'output': '',
+        'width': '',
+        'height': '',
+        'margin': '',
+        'shapes': 'unprojected iterable of shapes (Points and LineSegments)',
+        'projection': 'Projection instance',
+        'colormap': 'ColorMap instance',
+        'decay': '',
+        'kernel': 'kernel instance',
+        'extent_in': 'extent in original space',
+        'extent_out': 'extent in projected space',
 
         'background': '',
         'background_image': '',
-        'background_brightness' : '',
+        'background_brightness': '',
 
         # OpenStreetMap background tiles
-        'osm' : 'True/False; see command line options',
-        'osm_base' : '',
-        'zoom' : '',
+        'osm': 'True/False; see command line options',
+        'osm_base': '',
+        'zoom': '',
 
         # These are for making an animation, ignored otherwise.
-        'ffmpegopts' : '',
-        'keepframes' : '',
-        'frequency'  : '',
-        'straggler_threshold' : '',
+        'ffmpegopts': '',
+        'keepframes': '',
+        'frequency': '',
+        'straggler_threshold': '',
 
         # We always instantiate an OptionParser in order to set up
         # default values.  You can use this OptionParser in your own
         # script, perhaps adding your own options.
-        'optparser' : 'OptionParser instance for command line processing',
+        'optparser': 'OptionParser instance for command line processing',
     }
 
-    _kernels = { 'linear': LinearKernel,
-                 'gaussian': GaussianKernel, }
-    _projections = { 'equirectangular': EquirectangularProjection,
-                     'mercator': MercatorProjection, }
+    _kernels = {'linear': LinearKernel,
+                'gaussian': GaussianKernel, }
+    _projections = {'equirectangular': EquirectangularProjection,
+                    'mercator': MercatorProjection, }
 
     def __init__(self, use_defaults=True):
         for k in self.glossary.keys():
@@ -940,13 +952,13 @@ class Configuration(object):
         optparser.add_option(
             '-p', '--points', metavar='FILE',
             help=(
-                'File containing one space-separated coordinate pair per line, '
-                'with optional point value as third term.'))
+                'File containing one space-separated coordinate pair per '
+                'line, with optional point value as third term.'))
         optparser.add_option(
             '', '--csv', metavar='FILE',
             help=(
-                'File containing one comma-separated coordinate pair per line, '
-                'the rest of the line is ignored.'))
+                'File containing one comma-separated coordinate pair per '
+                'line, the rest of the line is ignored.'))
         optparser.add_option(
             '', '--ignore_csv_header', action='store_true',
             help='Ignore first line of CSV input file.')
@@ -970,7 +982,8 @@ class Configuration(object):
         optparser.add_option(
             '-e', '--extent', metavar='RANGE',
             help=(
-                'Clip results to RANGE, which is specified as lat1,lon1,lat2,lon2;'
+                'Clip results to RANGE, which is specified as '
+                'lat1,lon1,lat2,lon2;'
                 ' (for square mercator: -85.0511,-180,85.0511,180)'))
         optparser.add_option(
             '-R', '--margin', metavar='INT', type='int', default=0,
@@ -989,7 +1002,8 @@ class Configuration(object):
         optparser.add_option(
             '-S', '--save', metavar='FILE', help='save processed data to FILE')
         optparser.add_option(
-            '-L', '--load', metavar='FILE', help='load processed data from FILE')
+            '-L', '--load', metavar='FILE',
+            help='load processed data from FILE')
         optparser.add_option(
             '-o', '--output', metavar='FILE',
             help='name of output file (image or video)')
@@ -1028,8 +1042,8 @@ class Configuration(object):
         optparser.add_option(
             '-G', '--gradient', metavar='FILE',
             help=(
-            'Take color gradient from this the first column of pixels in '
-            'this image.  Overrides -m and -M.'))
+                'Take color gradient from this the first column of pixels in '
+                'this image.  Overrides -m and -M.'))
         optparser.add_option(
             '-k', '--kernel',
             type='choice',
@@ -1065,10 +1079,11 @@ class Configuration(object):
             self.projection.meters_per_pixel = options.scale
 
         if options.gradient:
-            self.colormap = ColorMap(image = Image.open(options.gradient))
+            self.colormap = ColorMap(image=Image.open(options.gradient))
         else:
-            self.colormap = ColorMap(hsva_min = ColorMap.str_to_hsva(options.hsva_min),
-                                     hsva_max = ColorMap.str_to_hsva(options.hsva_max))
+            self.colormap = ColorMap(
+                hsva_min=ColorMap.str_to_hsva(options.hsva_min),
+                hsva_max=ColorMap.str_to_hsva(options.hsva_max))
 
         if options.gpx:
             logging.debug('Reading from gpx: %s' % options.gpx)
@@ -1078,7 +1093,8 @@ class Configuration(object):
             self.shapes = shapes_from_file(options.points)
         elif options.csv:
             logging.debug('Reading from csv: %s' % options.csv)
-            self.shapes = shapes_from_csv(options.csv, options.ignore_csv_header)
+            self.shapes = shapes_from_csv(options.csv,
+                                          options.ignore_csv_header)
         elif options.shp_file:
             logging.debug('Reading from Shape File: %s' % options.shp_file)
             self.shapes = shapes_from_shp(options.shp_file)
@@ -1091,7 +1107,6 @@ class Configuration(object):
         if options.background_image:
             self.background_image = Image.open(options.background_image)
             (self.width, self.height) = self.background_image.size
-
 
     def fill_missing(self):
         if not self.shapes:
@@ -1111,8 +1126,9 @@ class Configuration(object):
                 self.projection.auto_set_scale(self.extent_in, padding,
                                                self.width, self.height)
                 if not (self.width or self.height or self.background_image):
-                    raise ValueError('You must specify width or height or scale '
-                                     'or background_image or both osm and zoom.')
+                    raise ValueError('You must specify width or height or '
+                                     'scale or background_image or both osm '
+                                     'and zoom.')
 
         if self.background_brightness is not None:
             if self.background_image:

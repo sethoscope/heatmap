@@ -27,11 +27,13 @@ import sys
 import heatmap as hm
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
+
 def shapes_generator(count):
     for i in range(count):
         a = random.gauss(10, 1.0)
         b = random.gauss(10, 2.0)
         yield hm.Point(hm.LatLon(a, b),)
+
 
 def setup_config(count):
     config = hm.Configuration()
@@ -43,6 +45,7 @@ def setup_config(count):
     config.background = 'black'
     config.fill_missing()
     return config
+
 
 def main():
     logging.basicConfig(format='%(relativeCreated)8d ms  // %(message)s')
