@@ -155,7 +155,7 @@ class Projection(object):
     def project(self, coords):
         raise NotImplementedError
 
-    def inverse_project(self, coords):   # Not all projections can support this.
+    def inverse_project(self, coords):   # Not all projections can do this.
         raise NotImplementedError
 
     def auto_set_scale(self, extent_in, padding, width=None, height=None):
@@ -513,7 +513,7 @@ class ColorMap:
         the first number is 3 digits.
         '''
         if string.startswith('#'):
-            string = string[1:]  # Leading "#" was once required, is now optional.
+            string = string[1:]  # Leading "#" is now optional.
         return tuple(ColorMap._str_to_float(s) for s in (string[0:3],
                                                          string[3:5],
                                                          string[5:7],
@@ -567,7 +567,8 @@ class ColorMap:
                     hsva_range, hsva_min))
                 hsva[0] = hsva[0] % 1  # in case hue is out of range
                 rgba = tuple(
-                    [int(x * 255) for x in hsv_to_rgb(*hsva[0:3]) + (hsva[3],)])
+                    [int(x * 255)
+                     for x in hsv_to_rgb(*hsva[0:3]) + (hsva[3],)])
                 self.values.append(rgba)
 
     def get(self, floatval):
@@ -667,8 +668,8 @@ class ImageSeriesMaker():
         self.inputs_since_output = 0
         self.frame_count = 0
         matrix = process_shapes(self.config, self.maybe_save_image)
-        if (not self.frame_count or
-                self.inputs_since_output >= self.config.straggler_threshold):
+        if ((not self.frame_count or
+             self.inputs_since_output >= self.config.straggler_threshold)):
             self._save_image(matrix)
         self.create_movie(self.imgfile_template,
                           self.config.output,
@@ -1101,7 +1102,7 @@ class Configuration(object):
 
         if options.extent:
             (lat1, lon1, lat2, lon2) = \
-                   [float(f) for f in options.extent.split(',')]
+                [float(f) for f in options.extent.split(',')]
             self.extent_in = Extent(coords=(LatLon(lat1, lon1),
                                             LatLon(lat2, lon2)))
         if options.background_image:
