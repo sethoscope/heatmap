@@ -19,7 +19,8 @@ python2_tests:
 	python2 test/test_random.py
 	python2 test/test_system.py
 	python2 test/test_system_gpx.py
-	pep8 heatmap.py
+	pep8 heatmap.py test/*.py
+	pyflakes heatmap.py test/*.py
 
 python3_tests:
 	python3 test/test.py
