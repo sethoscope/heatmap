@@ -36,8 +36,6 @@ try:
 except ImportError:
     import pickle
 
-__version__ = '1.11'
-
 
 class Coordinate(object):
     def __init__(self, x, y):
@@ -870,7 +868,7 @@ class Configuration(object):
     an iterator for the input data.
 
     Most of the command line processing is about settings and data, so
-    the command line options are also processed with this object.
+    the command line arguments are also processed with this object.
     This happens in two phases.
 
     First the settings are parsed and turned into more useful objects
@@ -922,10 +920,10 @@ class Configuration(object):
         'frequency': '',
         'straggler_threshold': '',
 
-        # We always instantiate an OptionParser in order to set up
-        # default values.  You can use this OptionParser in your own
-        # script, perhaps adding your own options.
-        'optparser': 'OptionParser instance for command line processing',
+        # We always instantiate an ArgumentParser in order to set up
+        # default values.  You can use this ArgumentParser in your own
+        # script, perhaps adding your own arguments.
+        'argparser': 'ArgumentParser instance for command line processing',
     }
 
     _kernels = {'linear': LinearKernel,
@@ -936,135 +934,137 @@ class Configuration(object):
     def __init__(self, use_defaults=True):
         for k in self.glossary.keys():
             setattr(self, k, None)
-        self.optparser = self._make_optparser()
+        self.argparser = self._make_argparser()
         if use_defaults:
             self.set_defaults()
 
     def set_defaults(self):
-        (options, args) = self.optparser.parse_args([])
-        self.set_from_options(options)
+        args = self.argparser.parse_args([])
+        self.set_from_options(args)
 
-    def _make_optparser(self):
-        '''Return a an OptionParser set up for our command line options.'''
-        # TODO: convert to argparse
-        from optparse import OptionParser
-        optparser = OptionParser(version=__version__)
-        optparser.add_option('-g', '--gpx', metavar='FILE')
-        optparser.add_option(
+    def _make_argparser(self):
+        '''Return a an ArgumentParser set up for our command line options.'''
+        from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+        description = 'plot a heatmap from coordinate data'
+        parser = ArgumentParser(description=description,
+                                formatter_class=ArgumentDefaultsHelpFormatter)
+        # TODO: allow multiple inputs of mixed types
+        inputs = parser.add_mutually_exclusive_group()
+        inputs.add_argument('-g', '--gpx', metavar='FILE')
+        inputs.add_argument(
             '-p', '--points', metavar='FILE',
             help=(
                 'File containing one space-separated coordinate pair per '
                 'line, with optional point value as third term.'))
-        optparser.add_option(
-            '', '--csv', metavar='FILE',
+        inputs.add_argument(
+            '--csv', metavar='FILE',
             help=(
                 'File containing one comma-separated coordinate pair per '
                 'line, the rest of the line is ignored.'))
-        optparser.add_option(
-            '', '--ignore_csv_header', action='store_true',
+        parser.add_argument(
+            '--ignore_csv_header', action='store_true',
             help='Ignore first line of CSV input file.')
-        optparser.add_option(
-            '', '--shp_file', metavar='FILE',
+        parser.add_argument(
+            '--shp_file', metavar='FILE',
             help=('ESRI Shapefile containing the points.'))
-        optparser.add_option(
-            '-s', '--scale', metavar='FLOAT', type='float',
+        parser.add_argument(
+            '-s', '--scale', type=float,
             help='meters per pixel, approximate'),
-        optparser.add_option(
-            '-W', '--width', metavar='INT', type='int',
+        parser.add_argument(
+            '-W', '--width', type=int,
             help='width of output image'),
-        optparser.add_option(
-            '-H', '--height', metavar='INT', type='int',
+        parser.add_argument(
+            '-H', '--height', type=int,
             help='height of output image'),
-        optparser.add_option(
-            '-P', '--projection', metavar='NAME', type='choice',
+        parser.add_argument(
+            '-P', '--projection', metavar='NAME',
             choices=list(self._projections.keys()), default='mercator',
             help='choices: ' + ', '.join(self._projections.keys()) +
-            '; default: %default')
-        optparser.add_option(
+            '; default: %(default)s')
+        parser.add_argument(
             '-e', '--extent', metavar='RANGE',
             help=(
                 'Clip results to RANGE, which is specified as '
                 'lat1,lon1,lat2,lon2;'
                 ' (for square mercator: -85.0511,-180,85.0511,180)'))
-        optparser.add_option(
-            '-R', '--margin', metavar='INT', type='int', default=0,
+        parser.add_argument(
+            '-R', '--margin', type=int, default=0,
             help=(
                 'Try to keep data at least this many pixels away from image '
                 'border.'))
-        optparser.add_option(
-            '-r', '--radius', metavar='INT', type='int', default=5,
-            help='pixel radius of point blobs; default: %default')
-        optparser.add_option(
-            '-d', '--decay', metavar='FLOAT', type='float', default=0.95,
+        parser.add_argument(
+            '-r', '--radius', type=int, default=5,
+            help='pixel radius of point blobs; default: %(default)s')
+        parser.add_argument(
+            '-d', '--decay', type=float, default=0.95,
             help=(
                 'float in [0,1]; Larger values give more weight to data '
                 'magnitude.  Smaller values are more democratic.  default:'
-                '%default'))
-        optparser.add_option(
+                '%(default)s'))
+        parser.add_argument(
             '-S', '--save', metavar='FILE', help='save processed data to FILE')
-        optparser.add_option(
+        parser.add_argument(
             '-L', '--load', metavar='FILE',
             help='load processed data from FILE')
-        optparser.add_option(
+        parser.add_argument(
             '-o', '--output', metavar='FILE',
             help='name of output file (image or video)')
-        optparser.add_option(
+        parser.add_argument(
             '-a', '--animate', action='store_true',
             help='Make an animation instead of a static image')
-        optparser.add_option(
-            '', '--frequency', type='int', default=1,
-            help='input points per animation frame; default: %default')
-        optparser.add_option(
-            '', '--straggler_threshold', type='int', default=1,
+        parser.add_argument(
+            '--frequency', type=int, default=1,
+            help='input points per animation frame; default: %(default)s')
+        parser.add_argument(
+            '--straggler_threshold', type=int, default=1,
             help='add one more animation frame if >= this many inputs remain')
-        optparser.add_option(
+        parser.add_argument(
             '-F', '--ffmpegopts', metavar='STR',
             help='extra options to pass to ffmpeg when making an animation')
-        optparser.add_option(
+        parser.add_argument(
             '-K', '--keepframes', action='store_true',
             help='keep intermediate images after creating an animation')
-        optparser.add_option(
+        parser.add_argument(
             '-b', '--background', metavar='COLOR',
             help='composite onto this background (color name or #rrggbb)')
-        optparser.add_option(
+        parser.add_argument(
             '-I', '--background_image', metavar='FILE',
             help='composite onto this image')
-        optparser.add_option(
-            '-B', '--background_brightness', type='float', metavar='NUM',
+        parser.add_argument(
+            '-B', '--background_brightness', type=float,
             help='Multiply each pixel in background image by this.')
-        optparser.add_option(
+        parser.add_argument(
             '-m', '--hsva_min', metavar='HEX',
             default=ColorMap.DEFAULT_HSVA_MIN_STR,
-            help='hhhssvvaa hex for minimum data values; default: %default')
-        optparser.add_option(
+            help='hhhssvvaa hex for minimum data values; default: %(default)s')
+        parser.add_argument(
             '-M', '--hsva_max', metavar='HEX',
             default=ColorMap.DEFAULT_HSVA_MAX_STR,
-            help='hhhssvvaa hex for maximum data values; default: %default')
-        optparser.add_option(
+            help='hhhssvvaa hex for maximum data values; default: %(default)s')
+        parser.add_argument(
             '-G', '--gradient', metavar='FILE',
             help=(
                 'Take color gradient from this the first column of pixels in '
                 'this image.  Overrides -m and -M.'))
-        optparser.add_option(
+        parser.add_argument(
             '-k', '--kernel',
-            type='choice',
             default='linear',
             choices=list(self._kernels.keys()),
             help=('Kernel to use for the falling-off function; choices: ' +
-                  ', '.join(self._kernels.keys()) + '; default: %default'))
-        optparser.add_option(
-            '', '--osm', action='store_true',
+                  ', '.join(self._kernels.keys()) + '; default: %(default)s'))
+        parser.add_argument(
+            '--osm', action='store_true',
             help='Composite onto OpenStreetMap tiles')
-        optparser.add_option(
-            '', '--osm_base', metavar='URL',
+        parser.add_argument(
+            '--osm_base', metavar='URL',
             default='http://tile.openstreetmap.org',
-            help='Base URL for map tiles; default %default')
-        optparser.add_option(
-            '-z', '--zoom', type='int',
+            help='Base URL for map tiles; default %(default)s')
+        parser.add_argument(
+            '-z', '--zoom', type=int,
             help='Zoom level for OSM; 0 (the default) means autozoom')
-        optparser.add_option('-v', '--verbose', action='store_true')
-        optparser.add_option('', '--debug', action='store_true')
-        return optparser
+        parser.add_argument('-v', '--verbose', action='store_true')
+        parser.add_argument('--debug', action='store_true')
+        return parser
 
     def set_from_options(self, options):
         for k in self.glossary.keys():
@@ -1151,38 +1151,39 @@ class Configuration(object):
 def main():
     logging.basicConfig(format='%(relativeCreated)8d ms  // %(message)s')
     config = Configuration(use_defaults=False)
-    (options, args) = config.optparser.parse_args()
+    args = config.argparser.parse_args()
 
-    if options.verbose:
+    if args.verbose:
         logging.getLogger().setLevel(logging.INFO)
-    if options.debug:
+    if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    if options.load:
+    if args.load:
         logging.info('loading data')
-        matrix = pickle.load(open(options.load, 'rb'))
-        config = matrix['config']
+        matrix = pickle.load(open(args.load, 'rb'))
+        config, matrix['config'].argparser = matrix['config'], config.argparser
         del matrix['config']
-        config.set_from_options(options)
+        config.set_from_options(args)
         config.fill_missing()
     else:
-        config.set_from_options(options)
+        config.set_from_options(args)
         config.fill_missing()
-        if options.animate:
+        if args.animate:
             animator = ImageSeriesMaker(config)
             matrix = animator.run()
         else:
             matrix = process_shapes(config)
             matrix = matrix.finalized()
 
-    if options.output and not options.animate:
+    if args.output and not args.animate:
         image = ImageMaker(config).make_image(matrix)
-        image.save(options.output)
+        image.save(args.output)
 
-    if options.save:
+    if args.save:
         logging.info('saving data')
         matrix['config'] = config
-        pickle.dump(matrix, open(options.save, 'wb'), 2)
+        del config.argparser   # can't pickle an ArgumentParser
+        pickle.dump(matrix, open(args.save, 'wb'), 2)
 
     logging.info('end')
 
