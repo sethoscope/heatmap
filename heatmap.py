@@ -611,6 +611,7 @@ class ImageMaker():
             img = Image.new('RGBA', (size.x, size.y))
 
         maxval = max(matrix.values())
+        logging.info('maximum density: %f' % maxval)
         pixels = img.load()
         for (coord, val) in matrix.items():
             if val == 0.0:
