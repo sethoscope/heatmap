@@ -575,7 +575,8 @@ class ColorMap:
                 self.values.append(rgba)
 
     def get(self, floatval):
-        return self.values[int(floatval * (len(self.values) - 1))]
+        clamped = min(max(0, floatval), 1)
+        return self.values[int(clamped * (len(self.values) - 1))]
 
 
 class ImageMaker():
@@ -600,7 +601,7 @@ class ImageMaker():
         return tuple(
             map(lambda aa, bb: int(aa * alpha + bb * (1 - alpha)), a[:3], b))
 
-    def make_image(self, matrix):
+    def make_image(self, matrix, brightness=0, contrast=1):
         extent = self.config.extent_out
         if not extent:
             extent = matrix.extent()
@@ -624,7 +625,8 @@ class ImageMaker():
             x = int(coord.x - extent.min.x)
             y = int(coord.y - extent.min.y)
             if extent.is_inside(coord):
-                color = self.config.colormap.get(val / maxval)
+                color = self.config.colormap.get(brightness +
+                                                 contrast * val / maxval)
                 if self.background:
                     pixels[x, y] = ImageMaker._blend_pixels(color,
                                                             self.background)
@@ -648,7 +650,8 @@ class ImageSeriesMaker():
         self.frame_count += 1
         logging.info('Frame %d' % (self.frame_count))
         matrix = matrix.finalized()
-        image = self.image_maker.make_image(matrix)
+        image = self.image_maker.make_image(matrix, self.config.brightness,
+                                                    self.config.contrast)
         image.save(self.imgfile_template % self.frame_count)
 
     def maybe_save_image(self, matrix):
@@ -950,6 +953,8 @@ class Configuration(object):
         'projection': 'Projection instance',
         'colormap': 'ColorMap instance',
         'decay': '',
+        'brightness': '',
+        'contrast': '',
         'kernel': 'kernel instance',
         'extent_in': 'extent in original space',
         'extent_out': 'extent in projected space',
@@ -1050,6 +1055,16 @@ class Configuration(object):
                 'float in [0,1]; Larger values give more weight to data '
                 'magnitude.  Smaller values are more democratic.  default:'
                 '%(default)s'))
+        parser.add_argument(
+            '--brightness', type=float, default=0,
+            help=(
+                'Boost (>0) or dim (<0) heat value brightness.  '
+                'default: %(default)s'))
+        parser.add_argument(
+            '--contrast', type=float, default=1,
+            help=(
+                'Increase (>1) or decrease (<1) contrast.  '
+                'default: %(default)s'))
         parser.add_argument(
             '-S', '--save', metavar='FILE', help='save processed data to FILE')
         parser.add_argument(
@@ -1247,7 +1262,8 @@ def main():
             matrix = matrix.finalized()
 
     if args.output and not args.animate:
-        image = ImageMaker(config).make_image(matrix)
+        image = ImageMaker(config).make_image(matrix, args.brightness,
+                                                      args.contrast)
         image.save(args.output)
 
     if args.save:
