@@ -382,7 +382,7 @@ class Point:
     @staticmethod
     def general_distance(x, y):
         # assumes square units, which causes distortion in some projections
-        return (x ** 2 + y ** 2) ** 0.5
+        return math.hypot(x, y)
 
     @property
     def extent(self):
@@ -447,7 +447,7 @@ class LineSegment:
             u = 0  # Our line is zero-length.  That's ok.
         dx = self.start.x + u * dx - coord.x
         dy = self.start.y + u * dy - coord.y
-        return math.sqrt(dx * dx + dy * dy)
+        return math.hypot(dx, dy)
 
     def add_heat_to_matrix(self, matrix, kernel):
         # Iterate over every point in a bounding box around this, with an
