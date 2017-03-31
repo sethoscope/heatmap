@@ -15,13 +15,13 @@ class Tests(TestHeatmap):
         try:
             self.helper_run(
                 [os.path.join(ROOT_DIR, 'heatmap.py'),
-                 '-p', os.path.join(ROOT_DIR, 'test', 'few-points'),
                  '-b', 'black',
                  '-r', '3',
                  '-W', '22',
                  '-P', 'equirectangular',
                  '--save', save_file,
-                 '-o', output_file])
+                 '-o', output_file,
+                 os.path.join(ROOT_DIR, 'test', 'few-points')])
 
             subprocess.check_call(
                 ['perceptualdiff',

@@ -39,22 +39,22 @@ class Tests(unittest.TestCase):
         try:
             subprocess.check_call(
                 [os.path.join(ROOT_DIR, 'heatmap.py'),
-                 '-p', os.path.join(ROOT_DIR, 'test', 'few-points'),
                  '-b', 'black',
                  '-r', '3',
                  '-P', 'equirectangular',
                  '--scale', '55659.745397',
-                 '-o', output_file_1])
+                 '-o', output_file_1,
+                 os.path.join(ROOT_DIR, 'test', 'few-points')])
 
             subprocess.check_call(
                 [os.path.join(ROOT_DIR, 'heatmap.py'),
-                 '-p', os.path.join(ROOT_DIR, 'test', 'few-points'),
                  '-b', 'black',
                  '-r', '3',
                  '-P', 'equirectangular',
                  '-W', '22',
                  '-H', '16',
-                 '-o', output_file_2])
+                 '-o', output_file_2,
+                 os.path.join(ROOT_DIR, 'test', 'few-points')])
 
             subprocess.check_call(
                 ['perceptualdiff',

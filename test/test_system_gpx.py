@@ -14,12 +14,12 @@ class Tests(TestHeatmap):
         try:
             self.helper_run(
                 [os.path.join(ROOT_DIR, 'heatmap.py'),
-                 '-g', os.path.join(ROOT_DIR, 'test', 'smile.gpx'),
                  '-b', 'black',
                  '-r', '3',
                  '-W', '22',
                  '-P', 'equirectangular',
-                 '-o', output_file])
+                 '-o', output_file,
+                 os.path.join(ROOT_DIR, 'test', 'smile.gpx')])
 
             subprocess.check_call(
                 ['perceptualdiff',
