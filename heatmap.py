@@ -29,6 +29,8 @@ import os.path
 import shutil
 import subprocess
 from collections import defaultdict
+from itertools import chain
+import glob
 import xml.etree.cElementTree as ET
 from colorsys import hsv_to_rgb
 try:
@@ -951,14 +953,14 @@ class Configuration(object):
                                 formatter_class=ArgumentDefaultsHelpFormatter)
         # TODO: allow multiple inputs of mixed types
         inputs = parser.add_mutually_exclusive_group()
-        inputs.add_argument('-g', '--gpx', metavar='FILE')
+        inputs.add_argument('-g', '--gpx', action='append', metavar='FILE')
         inputs.add_argument(
-            '-p', '--points', metavar='FILE',
+            '-p', '--points', action='append', metavar='FILE',
             help=(
                 'File containing one space-separated coordinate pair per '
                 'line, with optional point value as third term.'))
         inputs.add_argument(
-            '--csv', metavar='FILE',
+            '--csv', action='append', metavar='FILE',
             help=(
                 'File containing one comma-separated coordinate pair per '
                 'line, the rest of the line is ignored.'))
@@ -966,7 +968,7 @@ class Configuration(object):
             '--ignore_csv_header', action='store_true',
             help='Ignore first line of CSV input file.')
         parser.add_argument(
-            '--shp_file', metavar='FILE',
+            '--shp_file', action='append', metavar='FILE',
             help=('ESRI Shapefile containing the points.'))
         parser.add_argument(
             '-s', '--scale', type=float,
@@ -1087,19 +1089,30 @@ class Configuration(object):
                 hsva_min=ColorMap.str_to_hsva(options.hsva_min),
                 hsva_max=ColorMap.str_to_hsva(options.hsva_max))
 
+        def load_many(method, patterns, *args):
+            return chain.from_iterable(
+                method(filename, *args)
+                    for filename
+                    in chain.from_iterable(
+                        glob.iglob(pattern)
+                            for pattern
+                            in patterns
+                    )
+            )
+
         if options.gpx:
             logging.debug('Reading from gpx: %s' % options.gpx)
-            self.shapes = shapes_from_gpx(options.gpx)
+            self.shapes = load_many(shapes_from_gpx, options.gpx)
         elif options.points:
             logging.debug('Reading from points: %s' % options.points)
-            self.shapes = shapes_from_file(options.points)
+            self.shapes = load_many(shapes_from_file, options.points)
         elif options.csv:
             logging.debug('Reading from csv: %s' % options.csv)
-            self.shapes = shapes_from_csv(options.csv,
-                                          options.ignore_csv_header)
+            self.shapes = load_many(shapes_from_csv, options.csv,
+                                                     options.ignore_csv_header)
         elif options.shp_file:
             logging.debug('Reading from Shape File: %s' % options.shp_file)
-            self.shapes = shapes_from_shp(options.shp_file)
+            self.shapes = load_many(shapes_from_shp, options.shp_file)
 
         if options.extent:
             (lat1, lon1, lat2, lon2) = \
