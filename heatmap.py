@@ -994,9 +994,26 @@ class Configuration(object):
         description = 'plot a heatmap from coordinate data'
         parser = ArgumentParser(description=description,
                                 formatter_class=ArgumentDefaultsHelpFormatter)
-        # TODO: allow multiple inputs of mixed types
+
         inputs = parser.add_mutually_exclusive_group()
         inputs.add_argument(
+            '-p', '--points', metavar='FILE',
+            help=('old (deprecated) way of specifying a single input '
+                  'file containing one space-separated coordinate pair '
+                  'per line, with optional point value as third term.'))
+        inputs.add_argument(
+            '--csv', metavar='FILE',
+            help=('old (deprecated) way of specifying a single input '
+                  'file containing one comma-separated coordinate pair per '
+                  'line, the rest of the line is ignored.'))
+        parser.add_argument(
+            '--shp_file', metavar='FILE',
+            help=('old (deprecated) way of specifying a single '
+                  'ESRI Shapefile containing points.'))
+        inputs.add_argument(
+            '-g', '--gpx', metavar='FILE',
+            help='old (deprecated) way of specifying a single GPX track file')
+        parser.add_argument(
             '-t', '--filetype',
             choices=list(self._filetypes.keys()), default='auto',
             help='default: %(default)s')
@@ -1103,6 +1120,27 @@ class Configuration(object):
             'files', nargs='*', help='input files', metavar='FILE')
         return parser
 
+    def legacy_cmdline_input(self, options):
+        flag_to_filetype = {'points': 'plain',
+                            'gpx': 'gpx',
+                            'csv': 'csv',
+                            'shp_file': 'shp'}
+        for flag, filetype in flag_to_filetype.items():
+            filename = getattr(options, flag)
+            if filename:
+                logging.warn(
+                    '--%s is deprecated; now you can just put the input file '
+                    'at the end of the command line. This legacy support '
+                    'will be removed someday.' % flag)
+                return filetype, [filename]
+        raise ValueError
+
+    def set_files_from_legacy_cmdline(self, options):
+        try:
+            self.filetype, self.files = self.legacy_cmdline_input(options)
+        except ValueError:
+            pass
+
     def set_from_options(self, options):
         for k in self.glossary.keys():
             try:
@@ -1122,6 +1160,8 @@ class Configuration(object):
             self.colormap = ColorMap(
                 hsva_min=ColorMap.str_to_hsva(options.hsva_min),
                 hsva_max=ColorMap.str_to_hsva(options.hsva_max))
+
+        self.set_files_from_legacy_cmdline(options)
 
         if self.files:
             if self.shapes:
