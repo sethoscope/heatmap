@@ -37,6 +37,8 @@ try:
 except ImportError:
     import pickle
 
+__version__ = '1.13'
+
 
 class Coordinate(object):
     def __init__(self, x, y):
@@ -1105,6 +1107,8 @@ class Configuration(object):
             help='Zoom level for OSM; 0 (the default) means autozoom')
         parser.add_argument('-v', '--verbose', action='store_true')
         parser.add_argument('--debug', action='store_true')
+        parser.add_argument('--version', action='version',
+                            version='%(prog)s ' + str(__version__))
         parser.add_argument(
             'files', nargs='*', help='input files', metavar='FILE')
         return parser
