@@ -1002,7 +1002,7 @@ class Configuration(object):
         parser.add_argument('--shp_file', help=SUPPRESS)
         inputs.add_argument('-g', '--gpx', help=SUPPRESS)
         parser.add_argument(
-            '-t', '--filetype',
+            '--filetype',
             choices=list(self._filetypes.keys()), default='auto',
             help=('Treat all input files as this type. ("auto" will guess '
                   'based on the filename extension.); default: %(default)s'))
