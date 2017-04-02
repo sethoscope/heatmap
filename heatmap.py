@@ -29,6 +29,8 @@ import tempfile
 import os.path
 import shutil
 import subprocess
+import platform
+import glob
 from collections import defaultdict
 import xml.etree.cElementTree as ET
 from colorsys import hsv_to_rgb
@@ -786,10 +788,14 @@ class FileReader():
     def __init__(self, filenames=[], extras={}):
         self.filenames = filenames
         self.config = extras
+        logging.debug('%s for %s' % (self.__class__.__name__, str(filenames)))
 
     def __iter__(self):
         '''Readers can be iterated over, yielding all their shapes.'''
-        return chain.from_iterable(self.read_file(f) for f in self.filenames)
+        filenames = self.filenames
+        if platform.system() == 'Windows':  # On Windows, apps do the globbing
+            filenames = chain.from_iterable(glob.iglob(f) for f in filenames)
+        return chain.from_iterable(self.read_file(f) for f in filenames)
 
     def read_file(self, filename):
         '''a simple file opener, for simple subclasses'''
@@ -900,7 +906,7 @@ class AutoFileReader(FileReader):
             reader_class = types[ext]
         except KeyError:
             reader_class = PlainFileReader
-        reader = reader_class([], self.config)
+        reader = reader_class([filename], self.config)
         return reader.read_file(filename)
 
 
@@ -1161,6 +1167,7 @@ class Configuration(object):
                 logging.warning('We have both input files and shapes')
                 logging.warning('Ignoring the input files!')
             else:
+                logging.debug('reading input files')
                 self.shapes = self._filetypes[options.filetype](
                     self.files, options.__dict__)
 
