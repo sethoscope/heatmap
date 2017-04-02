@@ -990,33 +990,22 @@ class Configuration(object):
 
     def _make_argparser(self):
         '''Return a an ArgumentParser set up for our command line options.'''
-        from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+        from argparse import (ArgumentParser, ArgumentDefaultsHelpFormatter,
+                              SUPPRESS)
         description = 'plot a heatmap from coordinate data'
         parser = ArgumentParser(description=description,
                                 formatter_class=ArgumentDefaultsHelpFormatter)
 
         inputs = parser.add_mutually_exclusive_group()
-        inputs.add_argument(
-            '-p', '--points', metavar='FILE',
-            help=('old (deprecated) way of specifying a single input '
-                  'file containing one space-separated coordinate pair '
-                  'per line, with optional point value as third term.'))
-        inputs.add_argument(
-            '--csv', metavar='FILE',
-            help=('old (deprecated) way of specifying a single input '
-                  'file containing one comma-separated coordinate pair per '
-                  'line, the rest of the line is ignored.'))
-        parser.add_argument(
-            '--shp_file', metavar='FILE',
-            help=('old (deprecated) way of specifying a single '
-                  'ESRI Shapefile containing points.'))
-        inputs.add_argument(
-            '-g', '--gpx', metavar='FILE',
-            help='old (deprecated) way of specifying a single GPX track file')
+        inputs.add_argument('-p', '--points', help=SUPPRESS)
+        inputs.add_argument('--csv', metavar='FILE', help=SUPPRESS)
+        parser.add_argument('--shp_file', help=SUPPRESS)
+        inputs.add_argument('-g', '--gpx', help=SUPPRESS)
         parser.add_argument(
             '-t', '--filetype',
             choices=list(self._filetypes.keys()), default='auto',
-            help='default: %(default)s')
+            help=('Treat all input files as this type. ("auto" will guess '
+                  'based on the filename extension.); default: %(default)s'))
         parser.add_argument(
             '--ignore_csv_header', action='store_true',
             help='ignore first line of CSV input files')
