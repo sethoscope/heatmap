@@ -22,13 +22,13 @@ class Tests(unittest.TestCase):
         try:
             subprocess.check_call(
                 [os.path.join(ROOT_DIR, 'heatmap.py'),
-                 '-p', os.path.join(ROOT_DIR, 'test', 'few-points'),
                  '-b', 'black',
                  '-r', '3',
                  '-W', '22',
                  '-P', 'equirectangular',
                  '-G', os.path.join(ROOT_DIR, 'test', 'gradient.png'),
-                 '-o', output_file])
+                 '-o', output_file,
+                 os.path.join(ROOT_DIR, 'test', 'few-points')])
 
             subprocess.check_call(
                 ['perceptualdiff',

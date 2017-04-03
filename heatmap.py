@@ -24,10 +24,13 @@ import logging
 import math
 from PIL import Image
 from PIL import ImageColor
+from itertools import chain
 import tempfile
 import os.path
 import shutil
 import subprocess
+import platform
+import glob
 from collections import defaultdict
 import xml.etree.cElementTree as ET
 from colorsys import hsv_to_rgb
@@ -35,6 +38,8 @@ try:
     import cPickle as pickle
 except ImportError:
     import pickle
+
+__version__ = '1.13'
 
 
 class Coordinate(object):
@@ -777,19 +782,46 @@ def process_shapes(config, hook=None):
     return matrix
 
 
-def shapes_from_gpx(filename):
-    track = TrackLog(filename)
-    for trkseg in track.segments():
-        for i, p1 in enumerate(trkseg[:-1]):
-            p2 = trkseg[i + 1]
-            yield LineSegment(p1.coords, p2.coords)
+class FileReader():
+    '''Abstract base class for file readers.'''
+
+    def __init__(self, filenames=[], extras={}):
+        self.filenames = filenames
+        self.config = extras
+        logging.debug('%s for %s' % (self.__class__.__name__, str(filenames)))
+
+    def __iter__(self):
+        '''Readers can be iterated over, yielding all their shapes.'''
+        filenames = self.filenames
+        if platform.system() == 'Windows':  # On Windows, apps do the globbing
+            filenames = chain.from_iterable(glob.iglob(f) for f in filenames)
+        return chain.from_iterable(self.read_file(f) for f in filenames)
+
+    def read_file(self, filename):
+        '''a simple file opener, for simple subclasses'''
+        logging.info('reading from %s' % filename)
+        return self.parse(open(filename, 'rU'))
 
 
-def shapes_from_file(filename):
-    logging.info('reading points from %s' % filename)
-    count = 0
-    with open(filename, 'rU') as f:
-        for line in f:
+class GPXFileReader(FileReader):
+    '''GPX track file reader'''
+    def read_file(self, filename):
+        track = TrackLog(filename)
+        for trkseg in track.segments():
+            for i, p1 in enumerate(trkseg[:-1]):
+                p2 = trkseg[i + 1]
+                yield LineSegment(p1.coords, p2.coords)
+
+
+class PlainFileReader(FileReader):
+    '''
+    Reads files containing one space-separated coordinate pair per
+    line, with optional point weight as third term.
+    '''
+    @staticmethod
+    def parse(lines):
+        count = 0
+        for line in lines:
             line = line.strip()
             if len(line) > 0:  # ignore blank lines
                 values = [float(x) for x in line.split()]
@@ -802,14 +834,13 @@ def shapes_from_file(filename):
         logging.info('read %d points' % count)
 
 
-def shapes_from_csv(filename, ignore_csv_header):
-    import csv
-    logging.info('reading csv')
-    count = 0
-    with open(filename, 'rU') as f:
-        reader = csv.reader(f)
-        if ignore_csv_header:
+class CSVFileReader(FileReader):
+    def parse(self, lines):
+        import csv
+        reader = csv.reader(lines)
+        if self.config['ignore_csv_header']:
             next(reader)  # Skip header line
+        count = 0
         for row in reader:
             (lat, lon) = (float(row[0]), float(row[1]))
             count += 1
@@ -817,50 +848,66 @@ def shapes_from_csv(filename, ignore_csv_header):
         logging.info('read %d points' % count)
 
 
-def shapes_from_shp(filename):
-    try:
-        import ogr
-    except ImportError:
+class ShapeFileReader(FileReader):
+    '''ESRI Shapefile reader'''
+    @staticmethod
+    def read_file(filename):
         try:
-            from osgeo import ogr
+            import ogr
         except ImportError:
-            raise ImportError("You need to have python-gdal bindings "
-                              "installed")
+            try:
+                from osgeo import ogr
+            except ImportError:
+                raise ImportError("You need to have python-gdal bindings "
+                                  "installed")
 
-    driver = ogr.GetDriverByName("ESRI Shapefile")
-    dataSource = driver.Open(filename, 0)
-    if dataSource is None:
-        raise Exception("Not a valid shape file")
+        driver = ogr.GetDriverByName("ESRI Shapefile")
+        dataSource = driver.Open(filename, 0)
+        if dataSource is None:
+            raise Exception("Not a valid shape file")
 
-    layer = dataSource.GetLayer()
-    if layer.GetGeomType() != 1:
-        raise Exception("Only point layers are supported")
+        layer = dataSource.GetLayer()
+        if layer.GetGeomType() != 1:
+            raise Exception("Only point layers are supported")
 
-    spatial_reference = layer.GetSpatialRef()
-    if spatial_reference is None:
-        raise Exception("The shapefile doesn't have spatial reference")
+        spatial_reference = layer.GetSpatialRef()
+        if spatial_reference is None:
+            raise Exception("The shapefile doesn't have spatial reference")
 
-    spatial_reference.AutoIdentifyEPSG()
-    auth_code = spatial_reference.GetAuthorityCode(None)
-    if auth_code == '':
-        raise Exception("The input shapefile projection could not be "
-                        "recognized")
+        spatial_reference.AutoIdentifyEPSG()
+        auth_code = spatial_reference.GetAuthorityCode(None)
+        if auth_code == '':
+            raise Exception("The input shapefile projection could not be "
+                            "recognized")
 
-    if auth_code != '4326':
-        # TODO: implement reproject layer
-        # (maybe geometry by geometry is easier)
-        raise Exception("Currently only Lng-Lat WGS84 is supported "
-                        "(EPSG 4326)")
+        if auth_code != '4326':
+            # TODO: implement reproject layer
+            # (maybe geometry by geometry is easier)
+            raise Exception("Currently only Lng-Lat WGS84 is supported "
+                            "(EPSG 4326)")
+        count = 0
+        for feature in layer:
+            geom = feature.GetGeometryRef()
+            lat = geom.GetY()
+            lon = geom.GetX()
+            count += 1
+            yield Point(LatLon(lat, lon))
+        logging.info('read %d points' % count)
 
-    count = 0
-    for feature in layer:
-        geom = feature.GetGeometryRef()
-        lat = geom.GetY()
-        lon = geom.GetX()
-        count += 1
-        yield Point(LatLon(lat, lon))
 
-    logging.info('read %d points' % count)
+class AutoFileReader(FileReader):
+    '''Delegates a reader based on each filename extension.'''
+    def read_file(self, filename):
+        types = {'.shp': ShapeFileReader,
+                 '.gpx': GPXFileReader,
+                 '.csv': CSVFileReader}
+        try:
+            _, ext = os.path.splitext(filename)
+            reader_class = types[ext]
+        except KeyError:
+            reader_class = PlainFileReader
+        reader = reader_class([filename], self.config)
+        return reader.read_file(filename)
 
 
 class Configuration(object):
@@ -898,6 +945,7 @@ class Configuration(object):
         'width': '',
         'height': '',
         'margin': '',
+        'files': 'input files',
         'shapes': 'unprojected iterable of shapes (Points and LineSegments)',
         'projection': 'Projection instance',
         'colormap': 'ColorMap instance',
@@ -931,6 +979,11 @@ class Configuration(object):
                 'gaussian': GaussianKernel, }
     _projections = {'equirectangular': EquirectangularProjection,
                     'mercator': MercatorProjection, }
+    _filetypes = {'plain': PlainFileReader,
+                  'gpx': GPXFileReader,
+                  'csv': CSVFileReader,
+                  'shp': ShapeFileReader,
+                  'auto': AutoFileReader, }
 
     def __init__(self, use_defaults=True):
         for k in self.glossary.keys():
@@ -945,29 +998,25 @@ class Configuration(object):
 
     def _make_argparser(self):
         '''Return a an ArgumentParser set up for our command line options.'''
-        from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+        from argparse import (ArgumentParser, ArgumentDefaultsHelpFormatter,
+                              SUPPRESS)
         description = 'plot a heatmap from coordinate data'
         parser = ArgumentParser(description=description,
                                 formatter_class=ArgumentDefaultsHelpFormatter)
-        # TODO: allow multiple inputs of mixed types
+
         inputs = parser.add_mutually_exclusive_group()
-        inputs.add_argument('-g', '--gpx', metavar='FILE')
-        inputs.add_argument(
-            '-p', '--points', metavar='FILE',
-            help=(
-                'File containing one space-separated coordinate pair per '
-                'line, with optional point value as third term.'))
-        inputs.add_argument(
-            '--csv', metavar='FILE',
-            help=(
-                'File containing one comma-separated coordinate pair per '
-                'line, the rest of the line is ignored.'))
+        inputs.add_argument('-p', '--points', help=SUPPRESS)
+        inputs.add_argument('--csv', metavar='FILE', help=SUPPRESS)
+        parser.add_argument('--shp_file', help=SUPPRESS)
+        inputs.add_argument('-g', '--gpx', help=SUPPRESS)
+        parser.add_argument(
+            '--filetype',
+            choices=list(self._filetypes.keys()), default='auto',
+            help=('Treat all input files as this type. ("auto" will guess '
+                  'based on the filename extension.); default: %(default)s'))
         parser.add_argument(
             '--ignore_csv_header', action='store_true',
-            help='Ignore first line of CSV input file.')
-        parser.add_argument(
-            '--shp_file', metavar='FILE',
-            help=('ESRI Shapefile containing the points.'))
+            help='ignore first line of CSV input files')
         parser.add_argument(
             '-s', '--scale', type=float,
             help='meters per pixel, approximate'),
@@ -980,8 +1029,7 @@ class Configuration(object):
         parser.add_argument(
             '-P', '--projection', metavar='NAME',
             choices=list(self._projections.keys()), default='mercator',
-            help='choices: ' + ', '.join(self._projections.keys()) +
-            '; default: %(default)s')
+            help='default: %(default)s')
         parser.add_argument(
             '-e', '--extent', metavar='RANGE',
             help=(
@@ -1051,8 +1099,8 @@ class Configuration(object):
             '-k', '--kernel',
             default='linear',
             choices=list(self._kernels.keys()),
-            help=('Kernel to use for the falling-off function; choices: ' +
-                  ', '.join(self._kernels.keys()) + '; default: %(default)s'))
+            help=('Kernel to use for the falling-off function; '
+                  'default: %(default)s'))
         parser.add_argument(
             '--osm', action='store_true',
             help='Composite onto OpenStreetMap tiles')
@@ -1065,7 +1113,32 @@ class Configuration(object):
             help='Zoom level for OSM; 0 (the default) means autozoom')
         parser.add_argument('-v', '--verbose', action='store_true')
         parser.add_argument('--debug', action='store_true')
+        parser.add_argument('--version', action='version',
+                            version='%(prog)s ' + str(__version__))
+        parser.add_argument(
+            'files', nargs='*', help='input files', metavar='FILE')
         return parser
+
+    def legacy_cmdline_input(self, options):
+        flag_to_filetype = {'points': 'plain',
+                            'gpx': 'gpx',
+                            'csv': 'csv',
+                            'shp_file': 'shp'}
+        for flag, filetype in flag_to_filetype.items():
+            filename = getattr(options, flag)
+            if filename:
+                logging.warn(
+                    '--%s is deprecated; now you can just put the input file '
+                    'at the end of the command line. This legacy support '
+                    'will be removed someday.' % flag)
+                return filetype, [filename]
+        raise ValueError
+
+    def set_files_from_legacy_cmdline(self, options):
+        try:
+            self.filetype, self.files = self.legacy_cmdline_input(options)
+        except ValueError:
+            pass
 
     def set_from_options(self, options):
         for k in self.glossary.keys():
@@ -1087,19 +1160,16 @@ class Configuration(object):
                 hsva_min=ColorMap.str_to_hsva(options.hsva_min),
                 hsva_max=ColorMap.str_to_hsva(options.hsva_max))
 
-        if options.gpx:
-            logging.debug('Reading from gpx: %s' % options.gpx)
-            self.shapes = shapes_from_gpx(options.gpx)
-        elif options.points:
-            logging.debug('Reading from points: %s' % options.points)
-            self.shapes = shapes_from_file(options.points)
-        elif options.csv:
-            logging.debug('Reading from csv: %s' % options.csv)
-            self.shapes = shapes_from_csv(options.csv,
-                                          options.ignore_csv_header)
-        elif options.shp_file:
-            logging.debug('Reading from Shape File: %s' % options.shp_file)
-            self.shapes = shapes_from_shp(options.shp_file)
+        self.set_files_from_legacy_cmdline(options)
+
+        if self.files:
+            if self.shapes:
+                logging.warning('We have both input files and shapes')
+                logging.warning('Ignoring the input files!')
+            else:
+                logging.debug('reading input files')
+                self.shapes = self._filetypes[options.filetype](
+                    self.files, options.__dict__)
 
         if options.extent:
             (lat1, lon1, lat2, lon2) = \
