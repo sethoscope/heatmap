@@ -3,14 +3,15 @@ language: python
 python:
     - "pypy"
     - "pypy3"
-    - "2.6"
     - "2.7"
     - "2.7_with_system_site_packages"
-    - "3.2"
-    - "3.2_with_system_site_packages"
-    - "3.3"
-    - "3.4"
+    - "3.6"
     - "3.5"
+    - "3.4"
+    - "3.3"
+    - "3.2_with_system_site_packages"
+    - "3.2"
+    - "2.6"
 
 before_install:
     - sudo ln -s /usr/lib/`uname -i`-linux-gnu/libz.so ~/virtualenv/python2.7/lib/
