@@ -20,7 +20,7 @@ install:
     - if [ "${TRAVIS_PYTHON_VERSION:0:3}" == "3.2" ]; then travis_retry pip install coverage==3.7.1; fi
     - if [ "${TRAVIS_PYTHON_VERSION:0:3}" != "3.2" ]; then travis_retry pip install coverage; fi
     - travis_retry pip install coveralls
-    - travis_retry pip install --quiet git+https://github.com/python-imaging/Pillow.git
+    - travis_retry pip install pillow
     - travis_retry sudo apt-get --quiet=2 install perceptualdiff
 
     # we only have gdal in system packages
