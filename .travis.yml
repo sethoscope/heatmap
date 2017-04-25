@@ -41,7 +41,7 @@ script:
     - python test/test_system.py
     - python test/test_system_gpx.py
     - python test/test_system_csv.py
-    - python test_old_cmdline_support.py
+    - python test/test_old_cmdline_support.py
 
     # we only have gdal in system packages
     - if [ "$TRAVIS_PYTHON_VERSION" == "2.7_with_system_site_packages" -o "$TRAVIS_PYTHON_VERSION" == "3.2_with_system_site_packages" ]; then coverage run --source heatmap --append ./test/test_shp_file.py; fi
