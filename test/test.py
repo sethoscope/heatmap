@@ -117,5 +117,6 @@ class Tests(unittest.TestCase):
         # Assert
         self.assertEqual(str(shapes[0]), "P((2.0, 4.5))")
 
+
 if __name__ == '__main__':
     unittest.main()
