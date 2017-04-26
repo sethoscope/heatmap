@@ -4,11 +4,7 @@
 import os
 import subprocess
 import sys
-
-try:
-    import unittest2 as unittest  # Python 2.6
-except ImportError:
-    import unittest
+import unittest
 
 ROOT_DIR = os.path.split(os.path.abspath(os.path.dirname(__file__)))[0]
 sys.path.append(ROOT_DIR)

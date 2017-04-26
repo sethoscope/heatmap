@@ -3,25 +3,24 @@ language: python
 python:
     - "pypy"
     - "pypy3"
-    - "2.6"
     - "2.7"
     - "2.7_with_system_site_packages"
-    - "3.2"
-    - "3.2_with_system_site_packages"
-    - "3.3"
-    - "3.4"
+    - "3.6"
     - "3.5"
+    - "3.4"
+    - "3.3"
+    - "3.2_with_system_site_packages"
+    - "3.2"
 
 before_install:
     - sudo ln -s /usr/lib/`uname -i`-linux-gnu/libz.so ~/virtualenv/python2.7/lib/
 
 install:
-    - if [ "$TRAVIS_PYTHON_VERSION" == "2.6" ]; then travis_retry pip install unittest2; fi
     # Coverage 4.0 doesn't support Python 3.2
     - if [ "${TRAVIS_PYTHON_VERSION:0:3}" == "3.2" ]; then travis_retry pip install coverage==3.7.1; fi
     - if [ "${TRAVIS_PYTHON_VERSION:0:3}" != "3.2" ]; then travis_retry pip install coverage; fi
     - travis_retry pip install coveralls
-    - travis_retry pip install --quiet git+https://github.com/python-imaging/Pillow.git
+    - travis_retry pip install pillow
     - travis_retry sudo apt-get --quiet=2 install perceptualdiff
 
     # we only have gdal in system packages
