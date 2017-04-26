@@ -37,13 +37,15 @@ script:
     - coverage run --source heatmap --append ./test/test_configuration.py
 
     # test_system_*.py call heatmap.py directly with coverage
-    - ./test/test_system.py
-    - ./test/test_system_gpx.py
-    - ./test/test_system_csv.py
-    - ./test_old_cmdline_support.py
+    - python test/test_system.py
+    - python test/test_system_gpx.py
+    - python test/test_system_csv.py
 
     # we only have gdal in system packages
     - if [ "$TRAVIS_PYTHON_VERSION" == "2.7_with_system_site_packages" -o "$TRAVIS_PYTHON_VERSION" == "3.2_with_system_site_packages" ]; then coverage run --source heatmap --append ./test/test_shp_file.py; fi
+
+    # we only have gdal in system packages
+    - if [ "$TRAVIS_PYTHON_VERSION" == "2.7_with_system_site_packages" -o "$TRAVIS_PYTHON_VERSION" == "3.2_with_system_site_packages" ]; then python test/test_old_cmdline_support.py; fi
 
 after_success:
     - coverage report

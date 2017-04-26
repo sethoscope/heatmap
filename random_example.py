@@ -70,5 +70,6 @@ def main():
     image = hm.ImageMaker(config).make_image(matrix)
     image.save(args.output)
 
+
 if __name__ == '__main__':
     main()

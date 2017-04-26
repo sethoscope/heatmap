@@ -36,5 +36,6 @@ class Tests(unittest.TestCase):
             except OSError:
                 pass  # perhaps it was never created
 
+
 if __name__ == '__main__':
     unittest.main()

@@ -60,6 +60,7 @@ def matrix_to_numpy(config, matrix):
             logging.debug('set (%d,%d) to %f' % (x, y, arr[x, y]))
     return arr
 
+
 def main():
     logging.basicConfig(format='%(relativeCreated)8d ms  // %(message)s')
     description = 'generate random points, save them in a numpy array'

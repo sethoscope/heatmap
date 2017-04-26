@@ -21,5 +21,6 @@ class Tests(unittest.TestCase):
             [os.path.join(ROOT_DIR, 'numpy_example.py'),
              '100'])
 
+
 if __name__ == '__main__':
     unittest.main()
