@@ -8,8 +8,8 @@ python:
     - "3.6"
     - "3.5"
     - "3.4"
+    - "3.4_with_system_site_packages"
     - "3.3"
-    - "3.2_with_system_site_packages"
     - "3.2"
 
 before_install:
