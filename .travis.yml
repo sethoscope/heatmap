@@ -30,6 +30,7 @@ script:
     - coverage erase
     - coverage run --source heatmap --append ./test/test.py
     - coverage run --source heatmap --append ./test/test_coordinates.py
+    - coverage run --source heatmap --append ./test/test_extent.py
     - coverage run --source heatmap --append ./test/test_projections.py
     - coverage run --source heatmap --append ./test/test_projection_scale.py
     - coverage run --source heatmap --append ./test/test_random.py
