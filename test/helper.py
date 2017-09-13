@@ -15,7 +15,7 @@ sys.path.append(ROOT_DIR)
 try:
     imp.find_module("coverage")
     # TODO COVERAGE_ARGS or something
-    COVERAGE_CMD = ["coverage", "run", "--append", "--source", "heatmap.py"]
+    COVERAGE_CMD = ["coverage", "run", "--append", "--include=heatmap.py"]
 except ImportError:
     COVERAGE_CMD = []
 
