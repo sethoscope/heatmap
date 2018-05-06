@@ -16,7 +16,7 @@ before_install:
 install:
     - pip install coverage
     - travis_retry pip install coveralls
-    - travis_retry pip install pillow
+    - travis_retry pip install -r requirements.txt
     - travis_retry sudo apt-get --quiet=2 install perceptualdiff
 
     # we only have gdal in system packages
