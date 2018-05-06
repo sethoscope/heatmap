@@ -1,2 +1,5 @@
 osmviz
 pillow
+
+on Debian Linux, required packages are:
+apt install python-pil:amd64 python-wheel python-setuptools python-pip; pip install osmviz
