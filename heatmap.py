@@ -846,8 +846,14 @@ class CSVFileReader(FileReader):
         count = 0
         for row in reader:
             (lat, lon) = (float(row[0]), float(row[1]))
+            weight = 1.0
+            if len(row) > 2:
+                try:
+                    weight = float(row[2])
+                except (ValueError):
+                    pass
             count += 1
-            yield Point(LatLon(lat, lon))
+            yield Point(LatLon(lat, lon), weight)
         logging.info('read %d points' % count)
 
 
