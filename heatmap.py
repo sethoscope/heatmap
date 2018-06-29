@@ -575,7 +575,10 @@ class ColorMap:
                 self.values.append(rgba)
 
     def get(self, floatval):
-        return self.values[int(floatval * (len(self.values) - 1))]
+        try:
+            return self.values[int(floatval * (len(self.values) - 1))]
+        except IndexError:
+            return self.values[0 if floatval<0 else -1]
 
 
 class ImageMaker():
@@ -624,7 +627,7 @@ class ImageMaker():
             x = int(coord.x - extent.min.x)
             y = int(coord.y - extent.min.y)
             if extent.is_inside(coord):
-                color = self.config.colormap.get(val / maxval)
+                color = self.config.colormap.get(val / maxval) if maxval > 0 else self.config.colormap.get(0)
                 if self.background:
                     pixels[x, y] = ImageMaker._blend_pixels(color,
                                                             self.background)
