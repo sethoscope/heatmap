@@ -43,3 +43,8 @@ switching to the new way.
 
 [![Build Status](https://travis-ci.org/sethoscope/heatmap.png?branch=master)](https://travis-ci.org/sethoscope/heatmap)
 [![Coverage Status](https://coveralls.io/repos/sethoscope/heatmap/badge.png?branch=master)](https://coveralls.io/r/sethoscope/heatmap?branch=master)
+
+## installation
+
+On Debian Linux, required packages can be installed by:
+`apt install python-pil:amd64 python-wheel python-setuptools python-pip; pip install osmviz`
