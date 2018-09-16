@@ -41,5 +41,5 @@ switching to the new way.
 
 ## Tests
 
-[![Build Status](https://travis-ci.org/sethoscope/heatmap.png?branch=master)](https://travis-ci.org/sethoscope/heatmap)
-[![Coverage Status](https://coveralls.io/repos/sethoscope/heatmap/badge.png?branch=master)](https://coveralls.io/r/sethoscope/heatmap?branch=master)
+[![Build Status](https://travis-ci.org/sethoscope/heatmap.svg?branch=master)](https://travis-ci.org/sethoscope/heatmap)
+[![Coverage Status](https://coveralls.io/repos/github/sethoscope/heatmap/badge.svg?branch=master)](https://coveralls.io/github/sethoscope/heatmap?branch=master)
