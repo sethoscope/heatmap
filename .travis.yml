@@ -7,8 +7,6 @@ python:
     - "2.7_with_system_site_packages"
     - "3.6"
     - "3.5"
-    - "3.4"
-    - "3.4_with_system_site_packages"
 
 before_install:
     - sudo ln -s /usr/lib/`uname -i`-linux-gnu/libz.so ~/virtualenv/python2.7/lib/
