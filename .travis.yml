@@ -18,6 +18,7 @@ before_install:
     - sudo ln -s /usr/lib/`uname -i`-linux-gnu/libz.so ~/virtualenv/python2.7/lib/
 
 install:
+    - pip install -U pip
     - pip install coverage
     - travis_retry pip install coveralls
     - travis_retry pip install -r requirements.txt
