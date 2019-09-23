@@ -112,9 +112,12 @@ class TrackLog:
                     yield self._segments.pop()
                     elem.clear()  # delete contents from parse tree
             elif elem.tag == 'trkpt' and event == 'end':
-                point = TrackLog.Trkpt(elem.attrib['lat'], elem.attrib['lon'])
-                self._segments[-1].append(point)
-                elem.clear()  # clear the trkpt node to minimize memory usage
+                try:
+                    point = TrackLog.Trkpt(elem.attrib['lat'], elem.attrib['lon'])
+                    self._segments[-1].append(point)
+                    elem.clear()  # clear the trkpt node to minimize memory usage
+                except KeyError:
+                    continue
 
     def __init__(self, filename):
         self.filename = filename
