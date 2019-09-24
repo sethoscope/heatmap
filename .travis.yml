@@ -7,13 +7,19 @@ python:
     - "2.7_with_system_site_packages"
     - "3.6"
     - "3.5"
-    - "3.4"
-    - "3.4_with_system_site_packages"
+
+# Enable 3.7 without globally enabling dist: xenial for other build jobs
+matrix:
+  include:
+    - python: 3.7
+      dist: xenial
 
 before_install:
     - sudo ln -s /usr/lib/`uname -i`-linux-gnu/libz.so ~/virtualenv/python2.7/lib/
 
 install:
+    - pip install -U pip
+    - pip install -U pyopenssl
     - pip install coverage
     - travis_retry pip install coveralls
     - travis_retry pip install -r requirements.txt
