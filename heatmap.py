@@ -112,9 +112,12 @@ class TrackLog:
                     yield self._segments.pop()
                     elem.clear()  # delete contents from parse tree
             elif elem.tag == 'trkpt' and event == 'end':
-                point = TrackLog.Trkpt(elem.attrib['lat'], elem.attrib['lon'])
-                self._segments[-1].append(point)
-                elem.clear()  # clear the trkpt node to minimize memory usage
+                try:
+                    point = TrackLog.Trkpt(elem.attrib['lat'], elem.attrib['lon'])
+                    self._segments[-1].append(point)
+                    elem.clear()  # clear the trkpt node to minimize memory usage
+                except KeyError:
+                    continue
 
     def __init__(self, filename):
         self.filename = filename
@@ -575,7 +578,10 @@ class ColorMap:
                 self.values.append(rgba)
 
     def get(self, floatval):
-        return self.values[int(floatval * (len(self.values) - 1))]
+        try:
+            return self.values[int(floatval * (len(self.values) - 1))]
+        except IndexError:
+            return self.values[0 if floatval<0 else -1]
 
 
 class ImageMaker():
@@ -624,7 +630,7 @@ class ImageMaker():
             x = int(coord.x - extent.min.x)
             y = int(coord.y - extent.min.y)
             if extent.is_inside(coord):
-                color = self.config.colormap.get(val / maxval)
+                color = self.config.colormap.get(val / maxval) if maxval > 0 else self.config.colormap.get(0)
                 if self.background:
                     pixels[x, y] = ImageMaker._blend_pixels(color,
                                                             self.background)
@@ -843,8 +849,14 @@ class CSVFileReader(FileReader):
         count = 0
         for row in reader:
             (lat, lon) = (float(row[0]), float(row[1]))
+            weight = 1.0
+            if len(row) > 2:
+                try:
+                    weight = float(row[2])
+                except (ValueError):
+                    pass
             count += 1
-            yield Point(LatLon(lat, lon))
+            yield Point(LatLon(lat, lon), weight)
         logging.info('read %d points' % count)
 
 
