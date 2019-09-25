@@ -4,7 +4,7 @@ with open("README.md") as f:
     long_description = f.read()
 
 setup(
-    name="sethoscope-heatmap",
+    name="heatmap-cli",
     version="1.14.dev0",
     description="Generate high quality heatmaps from coordinate data",
     long_description=long_description,
