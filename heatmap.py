@@ -708,7 +708,7 @@ def _get_osm_image(bbox, zoom, osm_base):
         logging.error(
             "ImportError: %s.\n"
             "The --osm option depends on the osmviz module, available from\n"
-            "http://cbick.github.com/osmviz/\n\n" % str(e))
+            "https://github.com/hugovk/osmviz\n\n" % str(e))
         sys.exit(1)
 
 
