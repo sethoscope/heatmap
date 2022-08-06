@@ -1,2 +1,2 @@
-osmviz
+osmviz>=4
 pillow
