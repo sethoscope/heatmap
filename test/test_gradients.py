@@ -5,30 +5,26 @@ import os
 import subprocess
 import sys
 import unittest
+from helper import TestHeatmap, TEST_DIR
 
-ROOT_DIR = os.path.split(os.path.abspath(os.path.dirname(__file__)))[0]
-sys.path.append(ROOT_DIR)
-
-
-class Tests(unittest.TestCase):
+class Tests(TestHeatmap):
 
     def test_system_gradient(self):
         '''Test system with a gradient image file.'''
-        output_file = os.path.join(ROOT_DIR, 'test', 'output.ppm')
+        output_file = os.path.join(TEST_DIR, 'output.ppm')
         try:
-            subprocess.check_call(
-                [os.path.join(ROOT_DIR, 'heatmap.py'),
-                 '-b', 'black',
+            self.helper_run(
+                ['-b', 'black',
                  '-r', '3',
                  '-W', '22',
                  '-P', 'equirectangular',
-                 '-G', os.path.join(ROOT_DIR, 'test', 'gradient.png'),
+                 '-G', os.path.join(TEST_DIR, 'gradient.png'),
                  '-o', output_file,
-                 os.path.join(ROOT_DIR, 'test', 'few-points')])
+                 os.path.join(TEST_DIR, 'few-points')])
 
             subprocess.check_call(
                 ['perceptualdiff',
-                 os.path.join(ROOT_DIR, 'test', 'few-points.ppm'),
+                 os.path.join(TEST_DIR, 'few-points.ppm'),
                  output_file])
         finally:
             try:

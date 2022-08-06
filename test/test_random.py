@@ -5,14 +5,11 @@ import os
 import subprocess
 import sys
 import unittest
-
-ROOT_DIR = os.path.split(os.path.abspath(os.path.dirname(__file__)))[0]
-sys.path.append(ROOT_DIR)
-
+from helper import ROOT_DIR, TEST_DIR
 
 class Tests(unittest.TestCase):
     def test_system(self):
-        output_file = os.path.join(ROOT_DIR, 'test', 'output.ppm')
+        output_file = os.path.join(TEST_DIR, 'output.ppm')
         try:
             subprocess.check_call(
                 [os.path.join(ROOT_DIR, 'random_example.py'),

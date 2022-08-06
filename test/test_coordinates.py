@@ -4,11 +4,8 @@
 import os
 import sys
 import unittest
-
-ROOT_DIR = os.path.split(os.path.abspath(os.path.dirname(__file__)))[0]
-sys.path.append(ROOT_DIR)
+import helper
 import heatmap as hm
-
 
 class Tests(unittest.TestCase):
 

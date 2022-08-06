@@ -3,33 +3,27 @@
 Test helpers
 """
 
-import imp
 import os
 import subprocess
 import sys
 import unittest
 
 ROOT_DIR = os.path.split(os.path.abspath(os.path.dirname(__file__)))[0]
+TEST_DIR = os.path.join(ROOT_DIR, 'test')
 sys.path.append(ROOT_DIR)
+HEATMAP_PY = os.path.join(ROOT_DIR, 'heatmap.py')
 
 try:
-    imp.find_module("coverage")
-    # TODO COVERAGE_ARGS or something
-    COVERAGE_CMD = ["coverage", "run", "--append", "--include=heatmap.py"]
+    import coverage
+    COVERAGE_CMD = [sys.executable,
+                    "-m", "coverage", "run", "--append", "--include=heatmap.py",
+                    HEATMAP_PY]
 except ImportError:
-    COVERAGE_CMD = []
-
+    COVERAGE_CMD = [sys.executable, HEATMAP_PY]
 
 class TestHeatmap(unittest.TestCase):
-
     def helper_run(self, args):
-        # Arrange
-        args = list(COVERAGE_CMD) + args
+        subprocess.check_call(COVERAGE_CMD + args)
 
-        # Act
-        subprocess.check_call(args)
-
-        # Assert
-        # Should run with no exceptions
 
 # End of file
