@@ -7,6 +7,7 @@ import sys
 import unittest
 from helper import ROOT_DIR, TEST_DIR
 
+
 class Tests(unittest.TestCase):
     def test_system(self):
         output_file = os.path.join(TEST_DIR, 'output.ppm')

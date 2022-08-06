@@ -16,10 +16,12 @@ HEATMAP_PY = os.path.join(ROOT_DIR, 'heatmap.py')
 try:
     import coverage
     COVERAGE_CMD = [sys.executable,
-                    "-m", "coverage", "run", "--append", "--include=heatmap.py",
+                    "-m", "coverage", "run",
+                    "--append", "--include=heatmap.py",
                     HEATMAP_PY]
 except ImportError:
     COVERAGE_CMD = [sys.executable, HEATMAP_PY]
+
 
 class TestHeatmap(unittest.TestCase):
     def helper_run(self, args):

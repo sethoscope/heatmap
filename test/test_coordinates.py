@@ -7,6 +7,7 @@ import unittest
 import helper
 import heatmap as hm
 
+
 class Tests(unittest.TestCase):
 
     def test_basic(self):

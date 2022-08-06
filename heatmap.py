@@ -113,9 +113,10 @@ class TrackLog:
                     elem.clear()  # delete contents from parse tree
             elif elem.tag == 'trkpt' and event == 'end':
                 try:
-                    point = TrackLog.Trkpt(elem.attrib['lat'], elem.attrib['lon'])
+                    point = TrackLog.Trkpt(elem.attrib['lat'],
+                                           elem.attrib['lon'])
                     self._segments[-1].append(point)
-                    elem.clear()  # clear the trkpt node to minimize memory usage
+                    elem.clear()  # clear trkpt node to minimize memory usage
                 except KeyError:
                     continue
 
@@ -548,17 +549,18 @@ class ColorMap:
             self.values = [image.getpixel((0, row)) for row in range(num_rows)]
             self.values.reverse()
             if self.values[0][3] != 0:
-                logging.warn('In gradient image %s, the bottom-left pixel is '
-                             'not fully transparent. If the output appears '
-                             'blocky, make sure your gradient image '
-                             'transitions to fully transparent at the bottom.'
-                             % os.path.basename(image.filename))
+                logging.warning('In gradient image %s, the bottom-left '
+                                'pixel is not fully transparent. If the '
+                                'output appears blocky, make sure your '
+                                'gradient image transitions to fully '
+                                'transparent at the bottom.'
+                                % os.path.basename(image.filename))
             if self.values[-1][3] != 255:
-                logging.warn('In gradient image %s, the top-left pixel is '
-                             'not fully opaque. If the output appears '
-                             'dim, try increasing the opacity of the '
-                             'upper region of your gradient image.'
-                             % os.path.basename(image.filename))
+                logging.warning('In gradient image %s, the top-left pixel is '
+                                'not fully opaque. If the output appears '
+                                'dim, try increasing the opacity of the '
+                                'upper region of your gradient image.'
+                                % os.path.basename(image.filename))
         else:
             if not hsva_min:
                 hsva_min = ColorMap.str_to_hsva(self.DEFAULT_HSVA_MIN_STR)
@@ -581,7 +583,7 @@ class ColorMap:
         try:
             return self.values[int(floatval * (len(self.values) - 1))]
         except IndexError:
-            return self.values[0 if floatval<0 else -1]
+            return self.values[0 if floatval < 0 else -1]
 
 
 class ImageMaker():
@@ -630,7 +632,8 @@ class ImageMaker():
             x = int(coord.x - extent.min.x)
             y = int(coord.y - extent.min.y)
             if extent.is_inside(coord):
-                color = self.config.colormap.get(val / maxval) if maxval > 0 else self.config.colormap.get(0)
+                color = self.config.colormap.get(val / maxval) \
+                        if maxval > 0 else self.config.colormap.get(0)
                 if self.background:
                     pixels[x, y] = ImageMaker._blend_pixels(color,
                                                             self.background)
@@ -1139,7 +1142,7 @@ class Configuration(object):
         for flag, filetype in flag_to_filetype.items():
             filename = getattr(options, flag)
             if filename:
-                logging.warn(
+                logging.warning(
                     '--%s is deprecated; now you can just put the input file '
                     'at the end of the command line. This legacy support '
                     'will be removed someday.' % flag)

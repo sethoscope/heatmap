@@ -7,6 +7,7 @@ import sys
 import unittest
 from helper import TestHeatmap, TEST_DIR
 
+
 class Tests(TestHeatmap):
 
     def test_system_gradient(self):

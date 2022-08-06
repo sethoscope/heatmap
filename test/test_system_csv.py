@@ -6,6 +6,7 @@ import subprocess
 import unittest
 from helper import TestHeatmap, TEST_DIR
 
+
 class Tests(TestHeatmap):
 
     def test_negative_values(self):
