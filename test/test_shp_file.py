@@ -5,23 +5,20 @@ import os
 import subprocess
 import sys
 import unittest
-
-ROOT_DIR = os.path.split(os.path.abspath(os.path.dirname(__file__)))[0]
-sys.path.append(ROOT_DIR)
+from helper import TestHeatmap, TEST_DIR
 
 
-class Tests(unittest.TestCase):
+class Tests(TestHeatmap):
 
     def test_system(self):
-        output_file = os.path.join(ROOT_DIR, 'test', 'output.ppm')
+        output_file = os.path.join(TEST_DIR, 'output.ppm')
         try:
-            subprocess.check_call(
-                [os.path.join(ROOT_DIR, 'heatmap.py'),
-                 '-b', 'black',
+            self.helper_run(
+                ['-b', 'black',
                  '-r', '3',
                  '-W', '22',
                  '-o', output_file,
-                 os.path.join(ROOT_DIR, 'test', 'test_shape_2.shp')])
+                 os.path.join(TEST_DIR, 'test_shape_2.shp')])
 
         finally:
             try:

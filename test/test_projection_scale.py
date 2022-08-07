@@ -5,13 +5,11 @@ import os
 import subprocess
 import sys
 import unittest
-
-ROOT_DIR = os.path.split(os.path.abspath(os.path.dirname(__file__)))[0]
-sys.path.append(ROOT_DIR)
+from helper import TestHeatmap, TEST_DIR
 import heatmap as hm
 
 
-class Tests(unittest.TestCase):
+class Tests(TestHeatmap):
 
     # To remove Python 3's
     # "DeprecationWarning: Please use assertRaisesRegex instead"
@@ -30,27 +28,25 @@ class Tests(unittest.TestCase):
         self.assertAlmostEqual(p.meters_per_pixel, 500)
 
     def test_system(self):
-        output_file_1 = os.path.join(ROOT_DIR, 'test', 'output-1.ppm')
-        output_file_2 = os.path.join(ROOT_DIR, 'test', 'output-2.ppm')
+        output_file_1 = os.path.join(TEST_DIR, 'output-1.ppm')
+        output_file_2 = os.path.join(TEST_DIR, 'output-2.ppm')
         try:
-            subprocess.check_call(
-                [os.path.join(ROOT_DIR, 'heatmap.py'),
+            self.helper_run([
                  '-b', 'black',
                  '-r', '3',
                  '-P', 'equirectangular',
                  '--scale', '55659.745397',
                  '-o', output_file_1,
-                 os.path.join(ROOT_DIR, 'test', 'few-points')])
+                 os.path.join(TEST_DIR, 'few-points')])
 
-            subprocess.check_call(
-                [os.path.join(ROOT_DIR, 'heatmap.py'),
+            self.helper_run([
                  '-b', 'black',
                  '-r', '3',
                  '-P', 'equirectangular',
                  '-W', '22',
                  '-H', '16',
                  '-o', output_file_2,
-                 os.path.join(ROOT_DIR, 'test', 'few-points')])
+                 os.path.join(TEST_DIR, 'few-points')])
 
             subprocess.check_call(
                 ['perceptualdiff',

@@ -6,26 +6,10 @@
 # It's only intended for my own use, but I've included it in the repo
 # anyway in case someone else finds it helpful.
 
-tests: python2_tests python3_tests
+all: tests coverage style
 
-python2_tests:
-	python2 test/test.py
-	python2 test/test_animation.py
-	python2 test/test_configuration.py
-	python2 test/test_coordinates.py
-	python2 test/test_gradients.py
-	python2 test/test_projection_scale.py
-	python2 test/test_projections.py
-	python2 test/test_random.py
-	python2 test/test_system.py
-	python2 test/test_system_gpx.py
-	python2 test/test_system_csv.py
-	python2 test/test_shp_file.py
-	python2 test/test_old_cmdline_support.py
-	pep8 heatmap.py test/*.py
-	pyflakes heatmap.py test/*.py
-
-python3_tests:
+test: tests
+tests:
 	python3 test/test.py
 	python3 test/test_animation.py
 	python3 test/test_configuration.py
@@ -36,6 +20,14 @@ python3_tests:
 	python3 test/test_random.py
 	python3 test/test_system.py
 	python3 test/test_system_gpx.py
-	python2 test/test_system_csv.py
-	python2 test/test_shp_file.py
+	python3 test/test_system_csv.py
+	python3 test/test_shp_file.py
 	python3 test/test_old_cmdline_support.py
+
+coverage_report:
+	python3 -m coverage report
+
+coverage: tests coverage_report
+
+style:
+	pycodestyle *.py test/*.py
