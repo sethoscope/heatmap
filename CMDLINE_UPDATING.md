@@ -4,10 +4,10 @@ Before version 1.13 (released in April 2017), you could only provide
 one input file, and the flag used to provide it depended on its type
 (CSV, GPX, ESRI Shapefile, etc).  Commands looked like this:
 
-    heatmap.py --points plainfile -o map.png --width 100
-    heatmap.py --csv points.csv -o map.png --width 100
-    heatmap.py --gpx track.gpx -o map.png --width 100
-    heatmap.py --shp_file points.shp -o map.png --width 100
+    heatmap.py -o map.png --width 100 --points plainfile
+    heatmap.py -o map.png --width 100 --csv points.csv
+    heatmap.py -o map.png --width 100 --gpx track.gpx
+    heatmap.py -o map.png --width 100 --shp_file points.shp
 
 As of version 1.13, the equivalent of those four commands would look like this:
 
