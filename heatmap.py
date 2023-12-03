@@ -1124,8 +1124,8 @@ class Configuration(object):
             default='http://tile.openstreetmap.org',
             help='Base URL for map tiles; default %(default)s')
         parser.add_argument(
-            '-z', '--zoom', type=int,
-            help='Zoom level for OSM; 0 (the default) means autozoom')
+            '-z', '--zoom', type=int, default=0,
+            help='Zoom level for OSM; 0 means autozoom.')
         parser.add_argument('-v', '--verbose', action='store_true')
         parser.add_argument('--debug', action='store_true')
         parser.add_argument('--version', action='version',
