@@ -809,7 +809,7 @@ class FileReader():
     def read_file(self, filename):
         '''a simple file opener, for simple subclasses'''
         logging.info('reading from %s' % filename)
-        return self.parse(open(filename, 'rU'))
+        return self.parse(open(filename, 'r'))
 
 
 class GPXFileReader(FileReader):
