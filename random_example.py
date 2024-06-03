@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Plots some random data to a heatmap.  This is not mainly useful for
 # testing and to illustrate how to use heatmap.py from other python code.
