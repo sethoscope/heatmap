@@ -200,7 +200,7 @@ class Projection(object):
                 'You need at least two data points for auto scaling. '
                 'Try specifying the scale explicitly (or extent + '
                 'height or width).')
-        assert(self.pixels_per_degree > 0)
+        assert self.pixels_per_degree > 0
 
 
 # Treats Lat/Lon as a square grid.
@@ -325,7 +325,7 @@ class Matrix(defaultdict):
         raise NotImplementedError
 
     def extent(self):
-        return(Extent(coords=self.keys()))
+        return Extent(coords=self.keys())
 
     def finalized(self):
         return self
