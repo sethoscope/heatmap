@@ -694,13 +694,17 @@ class ImageSeriesMaker():
         return matrix
 
 
-def _get_osm_image(bbox, zoom, osm_base):
+def _get_osm_image(bbox, zoom, osm_base, osm_path_template):
     # Just a wrapper for osm.create_osm_image to translate coordinate schemes
     try:
         from osmviz.manager import PILImageManager, OSMManager
+        if not (osm_base.endswith('/') or osm_path_template.startswith('/')):
+            logging.warning(f'OSM URL path template {osm_path_template} '
+                            'probably needs a / at the beginning.')
         osm = OSMManager(
             image_manager=PILImageManager('RGB'),
-            server=osm_base)
+            server=osm_base,
+            url=osm_base + osm_path_template)
         (c1, c2) = bbox.corners()
         image, bounds = osm.create_osm_image((c1.lat, c2.lat, c1.lon, c2.lon),
                                              zoom)
@@ -760,7 +764,8 @@ def get_osm_background(config, padding):
     # We're not checking that the padding fits within the specified size.
     bbox_xy.grow(padding)
     bbox_ll = bbox_xy.map(proj.inverse_project)
-    image, img_bbox_ll = _get_osm_image(bbox_ll, zoom, config.osm_base)
+    image, img_bbox_ll = _get_osm_image(bbox_ll, zoom, config.osm_base,
+                                        config.osm_path_template)
     img_bbox_xy = img_bbox_ll.map(proj.project)
 
     # TODO: this crops to our data extent, which means we're not making
@@ -976,6 +981,7 @@ class Configuration(object):
         # OpenStreetMap background tiles
         'osm': 'True/False; see command line options',
         'osm_base': '',
+        'osm_path_template': '',
         'zoom': '',
 
         # These are for making an animation, ignored otherwise.
@@ -1123,6 +1129,10 @@ class Configuration(object):
             '--osm_base', metavar='URL',
             default='http://tile.openstreetmap.org',
             help='Base URL for map tiles; default %(default)s')
+        parser.add_argument(
+            '--osm_path_template', metavar='TEMPLATE',
+            default='/{z}/{x}/{y}.png',
+            help='URL path template for map tiles; default %(default)s')
         parser.add_argument(
             '-z', '--zoom', type=int, default=0,
             help='Zoom level for OSM; 0 means autozoom.')
