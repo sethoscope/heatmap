@@ -17,8 +17,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import print_function
-
 import sys
 import logging
 import math
@@ -784,6 +782,22 @@ def get_osm_background(config, padding):
     return image, bbox_ll, proj
 
 
+def value_invert_image(im):
+    '''
+    Invert just the Value of an image, leaving Hue,
+    Saturation, and Alpha intact.
+    '''
+    alpha = im.getchannel('A') if 'A' in im.getbands() else None
+    hsv = im.convert(mode='HSV')
+    (h, s, v) = hsv.split()
+    v = v.point(lambda x: 255 - x)
+    hsv = Image.merge('HSV', (h, s, v))
+    rgba = hsv.convert(mode='RGBA')
+    if alpha:
+        rgba.putalpha(alpha)
+    return rgba
+
+
 def process_shapes(config, hook=None):
     matrix = Matrix.matrix_factory(config.decay)
     logging.info('processing data')
@@ -944,9 +958,9 @@ class Configuration(object):
     Configuration object is populated with the specified values and
     defaults.
 
-    In the second phase, various other parameters are computed.  These
-    are things we set automatically based on the other settings or on
-    the data.  You can skip this if you set everything manually, but
+    In the second phase, fill_missing(), various other parameters are
+    computed.  These are things we set automatically based on the other
+    settings or on the data.
 
     The idea is that someone could import this module, populate a
     Configuration instance manually, and run the process themselves.
@@ -977,6 +991,8 @@ class Configuration(object):
         'background': '',
         'background_image': '',
         'background_brightness': '',
+        'invert_background': '',
+        'background_transformer': 'function to apply to background image',
 
         # OpenStreetMap background tiles
         'osm': 'True/False; see command line options',
@@ -1104,6 +1120,9 @@ class Configuration(object):
             '-B', '--background_brightness', type=float,
             help='Multiply each pixel in background image by this.')
         parser.add_argument(
+            '-N', '--invert_background', action='store_true',
+            help='Value-invert the background image. (Cannot be used with -B)')
+        parser.add_argument(
             '-m', '--hsva_min', metavar='HEX',
             default=ColorMap.DEFAULT_HSVA_MIN_STR,
             help='hhhssvvaa hex for minimum data values; default: %(default)s')
@@ -1227,14 +1246,20 @@ class Configuration(object):
                                      'scale or background_image or both osm '
                                      'and zoom.')
 
-        if self.background_brightness is not None:
+        if self.invert_background:
+            self.background_transformer = value_invert_image
+        elif self.background_brightness is not None:
+            def _brightness(image):
+                return image.point(lambda x: x * self.background_brightness)
+            self.background_transformer = _brightness
+
+        if self.background_transformer:
             if self.background_image:
-                self.background_image = self.background_image.point(
-                    lambda x: x * self.background_brightness)
-                self.background_brightness = None   # idempotence
+                self.background_image = \
+                    self.background_transformer(self.background_image)
             else:
                 logging.warning(
-                    'background brightness specified, but no background image')
+                    'background transform specified, but no background image')
 
         if not self.extent_out:
             self.extent_out = self.extent_in.map(self.projection.project)
