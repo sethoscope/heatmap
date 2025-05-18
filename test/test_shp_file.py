@@ -2,8 +2,6 @@
 """Test case."""
 
 import os
-import subprocess
-import sys
 import unittest
 from helper import TestHeatmap, TEST_DIR
 

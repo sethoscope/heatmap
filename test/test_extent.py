@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 """Test Extent class."""
 
-import os
-import sys
 import unittest
 import heatmap as hm
 

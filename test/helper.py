@@ -15,6 +15,7 @@ HEATMAP_PY = os.path.join(ROOT_DIR, 'heatmap.py')
 
 try:
     import coverage
+    _ = coverage.__version__  # so pyflakes doesn't warn about unused import
     COVERAGE_CMD = [sys.executable,
                     "-m", "coverage", "run",
                     "--append", "--include=heatmap.py",

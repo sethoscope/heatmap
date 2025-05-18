@@ -22,7 +22,6 @@ import logging
 import sys
 import heatmap as hm
 import PIL
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 # This is just an example of doing two heatmaps and compositing the
 # results, all in one python process.  Some of the config is here in

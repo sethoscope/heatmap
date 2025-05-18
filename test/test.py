@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 """Test case."""
 
-import os
 import sys
 import unittest
-import helper
 import heatmap as hm
 
 
