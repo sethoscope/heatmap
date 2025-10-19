@@ -1250,7 +1250,7 @@ class Configuration(object):
             self.background_transformer = value_invert_image
         elif self.background_brightness is not None:
             def _brightness(image):
-                return image.point(lambda x: x * self.background_brightness)
+                return image.point(lambda x: int(x * self.background_brightness))
             self.background_transformer = _brightness
 
         if self.background_transformer:
