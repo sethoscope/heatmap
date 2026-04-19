@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Plots some random data to a heatmap.  This is not mainly useful for
 # testing and to illustrate how to use heatmap.py from other python code.
@@ -24,9 +24,8 @@ from __future__ import print_function
 import random
 import logging
 import sys
-import heatmap as hm
+import heatmap77 as hm
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
-import numpy as np
 
 
 def shapes_generator(count):
@@ -48,25 +47,13 @@ def setup_config(count):
     return config
 
 
-def matrix_to_numpy(config, matrix):
-    extent = config.extent_out or matrix.extent()
-    arr = np.zeros((int(extent.size().x) + 1,
-                    int(extent.size().y) + 1))
-    for (coord, value) in matrix.items():
-        x = int(coord.x - extent.min.x)
-        y = int(coord.y - extent.min.y)
-        if extent.is_inside(coord):
-            arr[x, y] = value
-            logging.debug('set (%d,%d) to %f' % (x, y, arr[x, y]))
-    return arr
-
-
 def main():
     logging.basicConfig(format='%(relativeCreated)8d ms  // %(message)s')
-    description = 'generate random points, save them in a numpy array'
+    description = 'plot random points'
     parser = ArgumentParser(description=description,
                             formatter_class=ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--output', metavar='FILE', default='/tmp/out.png')
+    parser.add_argument('--output', metavar='FILE', default='/tmp/out.png',
+                        help=';')
     parser.add_argument('-v', '--verbose', action='store_true')
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('count', type=int)
@@ -81,12 +68,8 @@ def main():
     config = setup_config(args.count)
     matrix = hm.process_shapes(config)
     matrix = matrix.finalized()
-    arr = matrix_to_numpy(config, matrix)
-    print('shape: ' + str(arr.shape))
-    print('max value: %f' % arr.max())
-    nonzero = np.count_nonzero(arr)
-    print('nonzero cells: %d / %d (%d%%)' % (nonzero, arr.size,
-                                             int(100.0 * nonzero / arr.size)))
+    image = hm.ImageMaker(config).make_image(matrix)
+    image.save(args.output)
 
 
 if __name__ == '__main__':

@@ -4,7 +4,7 @@
 import os
 import subprocess
 import unittest
-from helper import ROOT_DIR, TEST_DIR
+from helper import EXAMPLES_DIR, TEST_DIR
 
 
 class Tests(unittest.TestCase):
@@ -12,7 +12,7 @@ class Tests(unittest.TestCase):
         output_file = os.path.join(TEST_DIR, 'output.ppm')
         try:
             subprocess.check_call(
-                [os.path.join(ROOT_DIR, 'random_example.py'),
+                [os.path.join(EXAMPLES_DIR, 'random_example.py'),
                  '--output', output_file,
                  '1'])
             self.assertTrue(os.path.exists(output_file))

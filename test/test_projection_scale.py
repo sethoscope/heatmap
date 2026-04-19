@@ -6,7 +6,7 @@ import subprocess
 import sys
 import unittest
 from helper import TestHeatmap, TEST_DIR
-import heatmap as hm
+import heatmap77 as hm
 
 
 class Tests(TestHeatmap):

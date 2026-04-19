@@ -10,7 +10,7 @@ try:
 except ImportError:
     import unittest
 
-from helper import ROOT_DIR
+from helper import EXAMPLES_DIR
 
 
 class Tests(unittest.TestCase):
@@ -18,7 +18,7 @@ class Tests(unittest.TestCase):
         # We just check that it runs, not that it's correct.
         subprocess.check_call(
             [sys.executable,
-             os.path.join(ROOT_DIR, 'numpy_example.py'),
+             os.path.join(EXAMPLES_DIR, 'numpy_example.py'),
              '100'])
 
 

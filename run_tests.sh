@@ -1,6 +1,6 @@
 #!/bin/sh
 
-coverage run --source=. -m pytest \
+uv run coverage run --source=. -m pytest \
   && coverage report
-pycodestyle *.py test/*.py
-pyflakes *.py test/*.py
+pycodestyle src/heatmap77/heatmap.py test/*.py examples/*.py
+pyflakes src/heatmap77/heatmap.py test/*.py examples/*.py

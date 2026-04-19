@@ -1,0 +1,53 @@
+[project]
+name = "heatmap77"
+version = "1.13.0"
+description = "Generates high quality heatmaps based on any coordinate data"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "osmviz>=4",
+    "pillow",
+]
+authors = [
+  { name="Seth Golub", email="entropy@gmail.com" },
+]
+keywords = ["heatmap", "datavis", "dataviz", "2d"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Development Status :: 5 - Production/Stable",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
+license = "AGPL-3.0-or-later"
+license-files = ["LICEN[CS]E*"]
+
+[project.urls]
+Homepage = "http://www.sethoscope.net/heatmap/"
+Repository = "https://github.com/sethoscope/heatmap"
+
+[build-system]
+requires = ["uv_build>=0.11.7,<0.12"]
+build-backend = "uv_build"
+
+[project.scripts]
+heatmap77 = "heatmap77:main"
+
+[tool.uv.build-backend]
+source-exclude = ["*\\~"]
+
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+publish-url = "https://test.pypi.org/legacy/"
+explicit = true
+
+[dependency-groups]
+dev = [
+    "coverage~=7.4.4",
+    "gdal==3.8.4",     # for shapefile tests. Also need libgdal34t64
+    "numpy>=1.24.4",   # only to test the numpy example
+    "pyflakes~=3.2.0",
+    "pytest~=7.4.4",
+]

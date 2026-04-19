@@ -2,7 +2,7 @@
 """Test Extent class."""
 
 import unittest
-import heatmap as hm
+import heatmap77 as hm
 
 
 class Tests(unittest.TestCase):

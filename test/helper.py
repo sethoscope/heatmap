@@ -7,11 +7,12 @@ import os
 import subprocess
 import sys
 import unittest
+import heatmap77 as hm
 
 ROOT_DIR = os.path.split(os.path.abspath(os.path.dirname(__file__)))[0]
 TEST_DIR = os.path.join(ROOT_DIR, 'test')
-sys.path.append(ROOT_DIR)
-HEATMAP_PY = os.path.join(ROOT_DIR, 'heatmap.py')
+EXAMPLES_DIR = os.path.join(ROOT_DIR, 'examples')
+HEATMAP_PY = os.path.join(hm.__path__[0], 'heatmap.py')
 
 try:
     import coverage
