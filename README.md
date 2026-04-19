@@ -39,7 +39,3 @@ one year, but the new way is nicer.
 Read [this tutorial](CMDLINE_UPDATING.md) for examples and help on
 switching to the new way.
 
-## Tests
-
-[![Build Status](https://travis-ci.org/sethoscope/heatmap.svg?branch=master)](https://travis-ci.org/sethoscope/heatmap)
-[![Coverage Status](https://coveralls.io/repos/github/sethoscope/heatmap/badge.svg?branch=master)](https://coveralls.io/github/sethoscope/heatmap?branch=master)
