@@ -1,4 +1,4 @@
-# heatmap
+# heatmap77
 
 ## why?
 
@@ -38,4 +38,10 @@ has changed. The old way will continue to be supported for at least
 one year, but the new way is nicer.
 Read [this tutorial](CMDLINE_UPDATING.md) for examples and help on
 switching to the new way.
+
+## name change
+
+It's "heatmap77" now, after 16 years of just being "heatmap.py".
+It needed a unique name for PyPi. The 77 doesn't mean anything,
+it's just short, easy, unique, and I think it sounds cool.
 
