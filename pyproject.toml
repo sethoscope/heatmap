@@ -1,6 +1,6 @@
 [project]
 name = "heatmap77"
-version = "1.13.0"
+version = "1.14.0"
 description = "Generates high quality heatmaps based on any coordinate data"
 readme = "README.md"
 requires-python = ">=3.8"

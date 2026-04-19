@@ -37,7 +37,7 @@ try:
 except ImportError:
     import pickle
 
-__version__ = '1.13'
+__version__ = '1.14'
 
 
 class Coordinate(object):
