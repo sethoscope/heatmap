@@ -20,7 +20,7 @@
 
 import logging
 import sys
-import heatmap as hm
+import heatmap77 as hm
 import PIL
 
 # This is just an example of doing two heatmaps and compositing the
